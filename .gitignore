@@ -49,6 +49,9 @@ logs/
 uploads/
 *.pem
 
+# Project scripts (do not include in repo)
+scripts/
+
 # Docker overrides
 docker-compose.override.yml
 
