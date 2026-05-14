@@ -1,0 +1,60 @@
+# Python compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Byte-compiled / test / coverage
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage/
+htmlcov/
+
+# Dotenv and local config
+.env
+.env.*
+local_settings.py
+
+# Databases
+*.sqlite3
+*.db
+*.sqlite
+
+# Logs
+*.log
+logs/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
+# Uploaded files / generated
+uploads/
+*.pem
+
+# Docker overrides
+docker-compose.override.yml
+
+# Misc
+pip-selfcheck.json
+celerybeat-schedule
+*.so
+
+# Keep this file backend-only; frontend dirs are tracked in the frontend repo

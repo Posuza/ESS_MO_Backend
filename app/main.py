@@ -1,0 +1,103 @@
+"""
+FastAPI Application Entry Point - Permission-Based Access Control (PBAC) Backend
+Brain / Nervous System / Hands Architecture
+
+Run with: uvicorn app.main:app --reload
+"""
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.api.endpoints import sector_report, employee, field, department, division, sector, zone, route, position, position_change_log, name_prefix, address, province, district, sub_district, postal_code
+from app.api.endpoints.auth import auth, forgot_password
+from app.core.config import settings
+from app.core.database import init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Auto-create SQLite DB + tables on startup.
+    init_db()
+    yield
+
+
+app = FastAPI(
+    title="GUTSESS Backend API",
+    description="""
+    GUTSESS Backend APIs
+       
+    ## api Levels
+    
+    | no | Name                | list | get1 | update | delete |
+    |----|---------------------|------|------|--------|--------|
+    | 1  | sector              | true | true | true   | true   |
+    | 2  | zone                | true | true | true   | true   |
+    | 3  | route               | true | true | true   | true   |
+    | 4  | position            | true | true | true   | true   |
+    | 5  | position_change_log | true | true | true   | true   |
+    | 6  | name_prefix         | true | true | true   | true   |
+    | 7  | address             | true | true | true   | true   |
+    | 8  | province            | true | true | true   | true   |
+    | 9  | district            | true | true | true   | true   |
+    | 10 | sub_district        | true | true | true   | true   |
+    | 11 | postal_code         | true | true | true   | true   |
+    | 12 | department          | true | true | true   | true   |
+    | 13 | division            | true | true | true   | true   |
+    | 14 | employee            | true | true | true   | true   |
+    | 15 | field               | true | true | true   | true   |
+    | 16 | sector_report       | true | true | true   | true   |
+
+
+    """,
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+# Auth endpoints (under /api/v1 prefix - matches production)
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(forgot_password.router, prefix="/api/v1")
+
+# Other endpoints (with /api/v1 prefix)
+app.include_router(sector_report.router, prefix="/api/v1")
+app.include_router(employee.router, prefix="/api/v1")
+app.include_router(field.router, prefix="/api/v1")
+app.include_router(department.router, prefix="/api/v1")
+app.include_router(division.router, prefix="/api/v1")
+app.include_router(sector.router, prefix="/api/v1")
+app.include_router(zone.router, prefix="/api/v1")
+app.include_router(route.router, prefix="/api/v1")
+app.include_router(position.router, prefix="/api/v1")
+app.include_router(position_change_log.router, prefix="/api/v1")
+app.include_router(name_prefix.router, prefix="/api/v1")
+app.include_router(address.router, prefix="/api/v1")
+app.include_router(province.router, prefix="/api/v1")
+app.include_router(district.router, prefix="/api/v1")
+app.include_router(sub_district.router, prefix="/api/v1")
+app.include_router(postal_code.router, prefix="/api/v1")
+
+
+@app.get("/")
+async def root():
+    return {
+        "status": "healthy",
+        "service": "PBAC Backend API",
+        "version": "1.0.0",
+        "architecture": "Brain/Nervous/Hands"
+    }
+
+
+@app.get("/api/v1/health")
+async def health_check():
+    return {"status": "ok"}
