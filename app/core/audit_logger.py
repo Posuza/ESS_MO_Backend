@@ -1,8 +1,7 @@
-
-
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Optional
 
 from fastapi import Request
@@ -17,6 +16,7 @@ _service = AuditLogService()
 
 # ─── Request context helpers ──────────────────────────────────────────────────
 
+
 def get_client_ip(request: Request) -> str:
     """Extract the real client IP, respecting X-Forwarded-For proxies."""
     forwarded = request.headers.get("X-Forwarded-For")
@@ -25,7 +25,9 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def get_geo_info(request: Request) -> tuple[Optional[str], Optional[str], Optional[str]]:
+def get_geo_info(
+    request: Request,
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """
     Return (latitude, longitude, geo_status) from request headers.
     Frontend sends X-Latitude / X-Longitude on success, or X-Geo-Status on denial.
@@ -85,6 +87,7 @@ def _extract_request_context(request: Request) -> dict:
 
 # ─── Audit wrapper ────────────────────────────────────────────────────────────
 
+
 class _AuditWrapper:
     """
     Thin façade over AuditLogService.
@@ -101,17 +104,34 @@ class _AuditWrapper:
         ip_address: str,
         employee_code: Optional[str] = None,
     ) -> None:
-        """Persist one audit entry. Safe to call anywhere — swallows DB errors."""
+        """Persist one audit entry. Safe to call anywhere — never blocks the request.
+
+        The DB write is executed in a background daemon thread so failures
+        cannot delay or break request processing. Exceptions from the write
+        are logged but not propagated.
+        """
+        payload = AuditLogCreate(
+            employee_code=employee_code,
+            user_name=user_name,
+            ip_address=ip_address,
+            action=action,
+        )
+
+        def _worker(p: AuditLogCreate) -> None:
+            try:
+                _service.create(p)
+            except Exception as exc:  # pragma: no cover - audit must not raise
+                _logger.error(
+                    "audit.log failed in background thread: %s", exc, exc_info=True
+                )
+
         try:
-            payload = AuditLogCreate(
-                employee_code=employee_code,
-                user_name=user_name,
-                ip_address=ip_address,
-                action=action,
-            )
-            _service.create(payload)
+            t = threading.Thread(target=_worker, args=(payload,), daemon=True)
+            t.start()
         except Exception as exc:  # pragma: no cover
-            _logger.error("audit.log failed: %s", exc, exc_info=True)
+            _logger.error(
+                "failed to start audit background thread: %s", exc, exc_info=True
+            )
 
     # ── action helper ────────────────────────────────────────────────────────
 
@@ -130,14 +150,18 @@ class _AuditWrapper:
 
         Extra keyword arguments are interpolated into the message template,
         e.g. audit.action("DATA", "ACT_DAT_001", resource="employee", ...).
-        
+
         Format: [ACT_KEY]ACTION_NAME | message
         """
         try:
             entry = ACTION_REGISTRY[category][key]
             message_template: str = entry["message"]
             action_name: str = entry["action"]
-            message = message_template.format(**fmt_kwargs) if fmt_kwargs else message_template
+            message = (
+                message_template.format(**fmt_kwargs)
+                if fmt_kwargs
+                else message_template
+            )
             full_action = f"[{key}]{action_name} | {message}"
         except KeyError:
             full_action = f"[UNKNOWN] {category}.{key}"
@@ -172,17 +196,23 @@ class _AuditWrapper:
             action_entry = ACTION_REGISTRY[category][key]
             action_name: str = action_entry["action"]
             message_template: str = action_entry["message"]
-            message = message_template.format(**fmt_kwargs) if fmt_kwargs else message_template
-            
+            message = (
+                message_template.format(**fmt_kwargs)
+                if fmt_kwargs
+                else message_template
+            )
+
             # Get error entry
             error_entry = ERROR_REGISTRY[error_category][error_key]
             error_type = error_entry["error"]
             error_message = error_entry["message"]
-            
+
             # Format: [ACT_KEY]ACTION | message | ERROR_KEY | ERROR_TYPE | ERROR_MESSAGE
             full_action = f"[{key}]{action_name} | {message} | {error_key} | {error_type} | {error_message}"
         except KeyError:
-            full_action = f"[UNKNOWN] {category}.{key} | Error: {error_category}.{error_key}"
+            full_action = (
+                f"[UNKNOWN] {category}.{key} | Error: {error_category}.{error_key}"
+            )
 
         self.log(
             action=full_action,
@@ -223,7 +253,9 @@ class _AuditWrapper:
                 + (f" | contacts={contacts_str}" if contacts_str else "")
             )
         except KeyError:
-            full_action = f"[ERR-UNKNOWN] {category}.{key}" + (f" | detail={detail}" if detail else "")
+            full_action = f"[ERR-UNKNOWN] {category}.{key}" + (
+                f" | detail={detail}" if detail else ""
+            )
 
         self.log(
             action=full_action,

@@ -21,23 +21,3 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-# OLD CODE BELOW - Not used with employee authentication
-# def authenticate_user(db: Session, login: str, password: str) -> Optional[Customer]:
-    """Authenticate user by username/email and password, only if active"""
-    try:
-        user = db.query(Customer).filter(
-            (Customer.username == login.lower()) | (Customer.email == login.lower())
-        ).first()
-        
-        if not user:
-            return None
-        
-        if not user.is_active:  # <-- Only allow active users
-            return None
-        
-        if not verify_password(password, user.password):
-            return None
-        
-        return user
-    except Exception:
-        return None

@@ -27,6 +27,12 @@ ERROR_REGISTRY: dict[str, dict[str, dict]] = {
         "ER_AUTH_1003": {"http_status": 401, "error": "TOKEN_EXPIRED", "message": "Session expired. Please refresh your token.", "contacts": [{"team": "SEC_OPS", "email": "sec-ops@gutsess.com"}]},
         "ER_AUTH_1004": {"http_status": 407, "error": "PROXY_AUTH_REQUIRED", "message": "Proxy authentication required.", "contacts": [{"team": "INFRA_CORE", "email": "infra@gutsess.com"}]},
         "ER_AUTH_1005": {"http_status": 511, "error": "NETWORK_AUTH_REQUIRED", "message": "Network authentication required to gain access.", "contacts": [{"team": "INFRA_CORE", "email": "infra@gutsess.com"}]},
+        "ER_AUTH_1006": {"http_status": 401, "error": "INVALID_CREDENTIALS", "message": "Incorrect employee code or password.", "contacts": [{"team": "SEC_OPS", "email": "sec-ops@gutsess.com"}]},
+        "ER_AUTH_1007": {"http_status": 403, "error": "ACCOUNT_INACTIVE", "message": "Account is inactive. Please contact administrator.", "contacts": [{"team": "SEC_OPS", "email": "sec-ops@gutsess.com"}]},
+        "ER_AUTH_1008": {"http_status": 403, "error": "ACCOUNT_LOCKED", "message": "Account is locked due to multiple failed login attempts.", "contacts": [{"team": "SEC_OPS", "email": "sec-ops@gutsess.com"}]},
+        "ER_AUTH_1009": {"http_status": 404, "error": "EMPLOYEE_NOT_FOUND", "message": "ไม่พบรหัสพนักงานในระบบ กรุณาติดต่อฝ่ายบุคคล", "contacts": [{"team": "HR_OPS", "email": "hr@gutsess.com"}]},
+        "ER_AUTH_1010": {"http_status": 403, "error": "ACCOUNT_INACTIVE_FORGOT_PASSWORD", "message": "บัญชีพนักงานไม่ได้ใช้งาน กรุณาติดต่อฝ่ายบุคคล", "contacts": [{"team": "HR_OPS", "email": "hr@gutsess.com"}]},
+        "ER_AUTH_1011": {"http_status": 400, "error": "NO_EMAIL_REGISTERED", "message": "ไม่พบอีเมลที่ลงทะเบียนไว้ กรุณาติดต่อฝ่ายบุคคล", "contacts": [{"team": "HR_OPS", "email": "hr@gutsess.com"}]},
     },
     "CLIENT": {
         "ER_CLIENT_2001": {"http_status": 400, "error": "BAD_REQUEST", "message": "The request was malformed or invalid.", "contacts": [{"team": "FE_DEV", "email": "fe-dev@gutsess.com"}]},

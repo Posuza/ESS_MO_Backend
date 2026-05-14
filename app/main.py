@@ -1,17 +1,31 @@
-"""
-FastAPI Application Entry Point - Permission-Based Access Control (PBAC) Backend
-Brain / Nervous System / Hands Architecture
-
-Run with: uvicorn app.main:app --reload
-"""
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import sector_report, employee, field, department, division, sector, zone, route, position, position_change_log, name_prefix, address, province, district, sub_district, postal_code
+from fastapi.responses import JSONResponse
+
+from app.api.endpoints import (
+    address,
+    department,
+    district,
+    division,
+    employee,
+    field,
+    name_prefix,
+    position,
+    position_change_log,
+    postal_code,
+    province,
+    route,
+    sector,
+    sector_report,
+    sub_district,
+    zone,
+)
 from app.api.endpoints.auth import auth, forgot_password
 from app.core.config import settings
 from app.core.database import init_db
+from app.core.db_error_handler import DatabaseErrorMiddleware
 
 
 @asynccontextmanager
@@ -25,9 +39,9 @@ app = FastAPI(
     title="GUTSESS Backend API",
     description="""
     GUTSESS Backend APIs
-       
+
     ## api Levels
-    
+
     | no | Name                | list | get1 | update | delete |
     |----|---------------------|------|------|--------|--------|
     | 1  | sector              | true | true | true   | true   |
@@ -64,6 +78,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Database Error Handler (catches all DB errors globally)
+app.add_middleware(DatabaseErrorMiddleware)
+
+
+# Custom HTTPException handler to support detail as object
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
 # Include routers
 # Auth endpoints (under /api/v1 prefix - matches production)
 app.include_router(auth.router, prefix="/api/v1")
@@ -94,7 +118,7 @@ async def root():
         "status": "healthy",
         "service": "PBAC Backend API",
         "version": "1.0.0",
-        "architecture": "Brain/Nervous/Hands"
+        "architecture": "Brain/Nervous/Hands",
     }
 
 

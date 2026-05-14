@@ -4,6 +4,7 @@ from sqlalchemy import func, select, update
 from app.core.orm import get_session
 from app.models.division import Division
 from app.schemas.division import DivisionCreate, DivisionUpdate
+from app.core.registries.error_registry import ERROR_REGISTRY
 
 
 class DivisionService:
@@ -39,7 +40,11 @@ class DivisionService:
                 select(Division).where(Division.division_id == division_id)
             ).scalars().first()
         if not row:
-            raise HTTPException(status_code=404, detail="Division not found")
+            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+            raise HTTPException(
+                status_code=entry["http_status"],
+                detail=entry["message"]  # Use registry message
+            )
         return row.__dict__
 
     def update_division(self, division_id: int, payload: DivisionUpdate) -> dict:
@@ -48,11 +53,19 @@ class DivisionService:
                 select(Division.division_id).where(Division.division_id == division_id)
             ).first()
             if not existing:
-                raise HTTPException(status_code=404, detail="Division not found")
+                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+                raise HTTPException(
+                    status_code=entry["http_status"],
+                    detail=entry["message"]  # Use registry message
+                )
 
         updates = payload.model_dump(exclude_unset=True)
         if not updates:
-            raise HTTPException(status_code=400, detail="No fields to update")
+            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2001"]
+            raise HTTPException(
+                status_code=entry["http_status"],
+                detail=entry["message"]  # Use registry message
+            )
 
         updates["updated_at"] = func.now()
 
@@ -69,7 +82,11 @@ class DivisionService:
             ).scalars().first()
             
             if not division_entry:
-                raise HTTPException(status_code=404, detail="Division not found")
+                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+                raise HTTPException(
+                    status_code=entry["http_status"],
+                    detail=entry["message"]  # Use registry message
+                )
                 
             session.delete(division_entry)
             session.commit()

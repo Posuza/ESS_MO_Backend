@@ -62,31 +62,9 @@ async def employee_register(
         )
         return db_employee
 
-    except HTTPException as e:
-        # Audit registration failure with detailed error info
-        error_category = "CLIENT" if e.status_code in [400, 409] else "AUTH"
-        error_key = "ER_CLIENT_2004" if e.status_code == 409 else "ER_CLIENT_2001"
-        
-        # Use employee name from registration data
-        user_name = f"{employee_data.first_name} {employee_data.last_name}".strip() or employee_data.email or employee_data.employee_code
-        
-        audit.action_with_error(
-            "AUTH", "ACT_AUTH_005",
-            request=request,
-            user_name=user_name,
-            employee_code=None,
-            error_category=error_category,
-            error_key=error_key,
-            resource="Employee"
-        )
+    except HTTPException:
+        # Re-raise HTTPException (auth/validation errors)
         raise
-    except Exception as e:
-        db.rollback()
-        # Use employee name from registration data
-        user_name = f"{employee_data.first_name} {employee_data.last_name}".strip() or employee_data.email or employee_data.employee_code
-        audit.error("BACKEND", "ER_BACKEND_3001", request=request, user_name=user_name, detail=str(e))
-        entry = ERROR_REGISTRY["BACKEND"]["ER_BACKEND_3001"]
-        raise HTTPException(status_code=entry["http_status"], detail=entry["message"])
 
 
 # Employee login
@@ -146,27 +124,9 @@ async def employee_login(
             "message": "Login successful"
         }
 
-    except HTTPException as e:
-        # Audit login failure with detailed error info
-        # Determine error category and key from status code
-        error_category = "CLIENT" if e.status_code == 400 else "AUTH"
-        error_key = "ER_CLIENT_2001" if e.status_code == 400 else "ER_AUTH_1002"
-        
-        audit.action_with_error(
-            "AUTH", "ACT_AUTH_002",
-            request=request,
-            user_name=user_name,
-            employee_code=credentials.employee_code if employee_lookup else None,
-            error_category=error_category,
-            error_key=error_key,
-            resource="Employee"
-        )
+    except HTTPException:
+        # Re-raise HTTPException (auth/validation errors)
         raise
-    except Exception as e:
-        # Log to audit and return generic backend error
-        audit.error("BACKEND", "ER_BACKEND_3001", request=request, user_name=user_name, detail=str(e))
-        entry = ERROR_REGISTRY["BACKEND"]["ER_BACKEND_3001"]
-        raise HTTPException(status_code=entry["http_status"], detail=entry["message"])
 
 
 # Employee logout (no token revocation, just audit logging)
@@ -207,17 +167,7 @@ async def employee_logout(
 
         return {"message": "Successfully logged out", "tokens_revoked": 0}
         
-    except Exception as e:
-        # Audit logout failure with detailed error info
-        audit.action_with_error(
-            "AUTH", "ACT_AUTH_005",
-            request=request,
-            user_name=user_name if 'user_name' in locals() else employee_code,
-            employee_code=employee_code if 'employee' in locals() and employee else None,
-            error_category="BACKEND",
-            error_key="ER_BACKEND_3001",
-            resource="Employee"
-        )
-        entry = ERROR_REGISTRY["BACKEND"]["ER_BACKEND_3001"]
-        raise HTTPException(status_code=entry["http_status"], detail=entry["message"])
+    except HTTPException:
+        # Re-raise HTTPException
+        raise
 

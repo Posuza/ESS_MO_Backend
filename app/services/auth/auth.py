@@ -52,7 +52,7 @@ class EmployeeAuthService:
             entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2004"]
             raise HTTPException(
                 status_code=entry["http_status"],
-                detail=entry["message"]
+                detail=entry["message"]  # Use registry message
             )
 
         # Check email uniqueness if provided
@@ -64,7 +64,7 @@ class EmployeeAuthService:
                 entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2004"]
                 raise HTTPException(
                     status_code=entry["http_status"],
-                    detail="Email already registered"
+                    detail=entry["message"]  # Use registry message
                 )
 
         # Store plaintext password (TODO: Hash when security enabled)
@@ -122,27 +122,30 @@ class EmployeeAuthService:
             Employee.employee_code == employee_code
         ).first()
         
+        # Use specific auth error for invalid credentials
         if not employee:
-            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2001"]
+            # Employee not found -> return explicit 404 with registry message and contacts
+            entry = ERROR_REGISTRY["AUTH"]["ER_AUTH_1009"]
             raise HTTPException(
                 status_code=entry["http_status"],
-                detail="Incorrect employee code or password"
+                detail={"message": entry["message"], "contacts": entry.get("contacts")}
             )
 
         # Verify password (plaintext comparison - TODO: use verify_password() when hashing enabled)
         if employee.password != password:
-            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2001"]
+            # Wrong password: keep generic invalid credentials (401)
+            entry = ERROR_REGISTRY["AUTH"]["ER_AUTH_1006"]
             raise HTTPException(
                 status_code=entry["http_status"],
-                detail="Incorrect employee code or password"
+                detail={"message": entry["message"], "contacts": entry.get("contacts")}
             )
 
-        # Check if account is active
+        # Check if account is active - use specific inactive error
         if not employee.is_active:
-            entry = ERROR_REGISTRY["AUTH"]["ER_AUTH_1002"]
+            entry = ERROR_REGISTRY["AUTH"]["ER_AUTH_1007"]
             raise HTTPException(
                 status_code=entry["http_status"],
-                detail="Account is inactive"
+                detail=entry["message"]  # "Account is inactive. Please contact administrator."
             )
 
         return employee

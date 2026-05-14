@@ -4,6 +4,7 @@ from sqlalchemy import func, select, update
 from app.core.orm import get_session
 from app.models.department import Department
 from app.schemas.department import DepartmentCreate, DepartmentUpdate
+from app.core.registries.error_registry import ERROR_REGISTRY
 
 
 class DepartmentService:
@@ -38,7 +39,11 @@ class DepartmentService:
                 select(Department).where(Department.department_id == department_id)
             ).scalars().first()
         if not row:
-            raise HTTPException(status_code=404, detail="Department not found")
+            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+            raise HTTPException(
+                status_code=entry["http_status"],
+                detail=entry["message"]  # Use registry message
+            )
         return row.__dict__
 
     def update_department(self, department_id: int, payload: DepartmentUpdate) -> dict:
@@ -47,11 +52,19 @@ class DepartmentService:
                 select(Department.department_id).where(Department.department_id == department_id)
             ).first()
             if not existing:
-                raise HTTPException(status_code=404, detail="Department not found")
+                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+                raise HTTPException(
+                    status_code=entry["http_status"],
+                    detail=entry["message"]  # Use registry message
+                )
 
         updates = payload.model_dump(exclude_unset=True)
         if not updates:
-            raise HTTPException(status_code=400, detail="No fields to update")
+            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2001"]
+            raise HTTPException(
+                status_code=entry["http_status"],
+                detail=entry["message"]  # Use registry message
+            )
 
         updates["updated_at"] = func.now()
 
@@ -68,7 +81,11 @@ class DepartmentService:
             ).scalars().first()
             
             if not department_entry:
-                raise HTTPException(status_code=404, detail="Department not found")
+                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+                raise HTTPException(
+                    status_code=entry["http_status"],
+                    detail=entry["message"]  # Use registry message
+                )
                 
             session.delete(department_entry)
             session.commit()

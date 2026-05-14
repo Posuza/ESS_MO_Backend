@@ -4,6 +4,7 @@ from sqlalchemy import func, select, update
 from app.core.orm import get_session
 from app.models.field import FieldModel
 from app.schemas.field import FieldCreate, FieldUpdate
+from app.core.registries.error_registry import ERROR_REGISTRY
 
 
 class FieldService:
@@ -37,7 +38,11 @@ class FieldService:
                 select(FieldModel).where(FieldModel.field_id == field_id)
             ).scalars().first()
         if not row:
-            raise HTTPException(status_code=404, detail="Field not found")
+            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+            raise HTTPException(
+                status_code=entry["http_status"],
+                detail=entry["message"]  # Use registry message
+            )
         return row.__dict__
 
     def update_field(self, field_id: int, payload: FieldUpdate) -> dict:
@@ -46,11 +51,19 @@ class FieldService:
                 select(FieldModel.field_id).where(FieldModel.field_id == field_id)
             ).first()
             if not existing:
-                raise HTTPException(status_code=404, detail="Field not found")
+                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+                raise HTTPException(
+                    status_code=entry["http_status"],
+                    detail=entry["message"]  # Use registry message
+                )
 
         updates = payload.model_dump(exclude_unset=True)
         if not updates:
-            raise HTTPException(status_code=400, detail="No fields to update")
+            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2001"]
+            raise HTTPException(
+                status_code=entry["http_status"],
+                detail=entry["message"]  # Use registry message
+            )
 
         updates["updated_at"] = func.now()
 
@@ -67,7 +80,11 @@ class FieldService:
             ).scalars().first()
             
             if not field_entry:
-                raise HTTPException(status_code=404, detail="Field not found")
+                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+                raise HTTPException(
+                    status_code=entry["http_status"],
+                    detail=entry["message"]  # Use registry message
+                )
                 
             session.delete(field_entry)
             session.commit()

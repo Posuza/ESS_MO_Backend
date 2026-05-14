@@ -5,6 +5,7 @@ from sqlalchemy import func, select, update
 from app.core.orm import get_session
 from app.models.employee import Employee
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate
+from app.core.registries.error_registry import ERROR_REGISTRY
 
 
 class EmployeeService:
@@ -47,7 +48,11 @@ class EmployeeService:
                 select(Employee.employee_code).where(Employee.employee_code == p["employee_code"])
             ).first()
             if existing:
-                raise HTTPException(status_code=400, detail="Employee code already exists")
+                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2004"]
+                raise HTTPException(
+                    status_code=entry["http_status"],
+                    detail=entry["message"]  # Use registry message
+                )
                 
             # Check for existing email if provided
             if p.get("email"):
@@ -55,7 +60,11 @@ class EmployeeService:
                     select(Employee.employee_code).where(Employee.email == p["email"])
                 ).first()
                 if existing_email:
-                    raise HTTPException(status_code=400, detail="Email already registered")
+                    entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2004"]
+                    raise HTTPException(
+                        status_code=entry["http_status"],
+                        detail=entry["message"]  # Use registry message
+                    )
 
             employee = Employee(
                 employee_code=p["employee_code"],
@@ -96,7 +105,11 @@ class EmployeeService:
                 select(Employee).where(Employee.employee_code == employee_code)
             ).scalars().first()
         if not row:
-            raise HTTPException(status_code=404, detail="Employee not found")
+            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+            raise HTTPException(
+                status_code=entry["http_status"],
+                detail=entry["message"]  # Use registry message
+            )
         return row.__dict__
 
     def update_employee(self, employee_code: str, payload: EmployeeUpdate) -> dict:
@@ -105,11 +118,19 @@ class EmployeeService:
                 select(Employee.employee_code).where(Employee.employee_code == employee_code)
             ).first()
             if not existing:
-                raise HTTPException(status_code=404, detail="Employee not found")
+                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+                raise HTTPException(
+                    status_code=entry["http_status"],
+                    detail=entry["message"]  # Use registry message
+                )
 
         updates = payload.model_dump(exclude_unset=True)
         if not updates:
-            raise HTTPException(status_code=400, detail="No fields to update")
+            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2001"]
+            raise HTTPException(
+                status_code=entry["http_status"],
+                detail=entry["message"]  # Use registry message
+            )
 
         # Track profile picture update timestamp automatically
         if "profile_image_path" in updates:
@@ -130,7 +151,11 @@ class EmployeeService:
             ).scalars().first()
             
             if not employee:
-                raise HTTPException(status_code=404, detail="Employee not found")
+                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
+                raise HTTPException(
+                    status_code=entry["http_status"],
+                    detail=entry["message"]  # Use registry message
+                )
                 
             session.delete(employee)
             session.commit()

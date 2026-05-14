@@ -69,6 +69,8 @@ async def forgot_password(
                 resource="Employee",
                 email=result["email"]
             )
+            # Return success message
+            return MessageResponse(message="ส่งรหัสผ่านไปยังอีเมลเรียบร้อยแล้ว กรุณาตรวจสอบอีเมลที่ลงทะเบียนไว้")
         else:
             # Failed - employee not found, inactive, or no email
             audit.action(
@@ -80,12 +82,25 @@ async def forgot_password(
                 resource="Employee",
                 reason=result["reason"]
             )
+            
+            # Return specific error based on reason using ERROR_REGISTRY
+            if result["reason"] == "Employee not found":
+                entry = ERROR_REGISTRY["AUTH"]["ER_AUTH_1009"]
+                raise HTTPException(status_code=entry["http_status"], detail=entry["message"])
+            elif result["reason"] == "Employee account is inactive":
+                entry = ERROR_REGISTRY["AUTH"]["ER_AUTH_1010"]
+                raise HTTPException(status_code=entry["http_status"], detail=entry["message"])
+            elif result["reason"] == "Employee has no email registered":
+                entry = ERROR_REGISTRY["AUTH"]["ER_AUTH_1011"]
+                raise HTTPException(status_code=entry["http_status"], detail=entry["message"])
+            else:
+                # Generic error for any other case
+                entry = ERROR_REGISTRY["BACKEND"]["ER_BACKEND_3001"]
+                raise HTTPException(status_code=entry["http_status"], detail=entry["message"])
         
-        # Always return generic message for security (don't reveal if employee exists)
-        if request.send_plain_password:
-            return MessageResponse(message="If that employee code is registered, your current password will be emailed.")
-        return MessageResponse(message="If that employee code is registered, a reset link has been sent.")
-        
+    except HTTPException:
+        # Let FastAPI handle expected HTTP errors (404/400/etc.) raised above
+        raise
     except Exception as e:
         audit.error("BACKEND", "ER_BACKEND_3001", request=req, user_name=request.employee_code, detail=str(e))
         entry = ERROR_REGISTRY["BACKEND"]["ER_BACKEND_3001"]
