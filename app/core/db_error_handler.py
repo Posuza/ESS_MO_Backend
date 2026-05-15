@@ -36,8 +36,8 @@ class DatabaseErrorMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             return response
 
-        except (OperationalError, InterfaceError, DBAPIError) as e:
-            # Database connection errors, timeouts
+        except (OperationalError, InterfaceError, DBAPIError, DatabaseError) as e:
+            # Database connection errors, timeouts, host blocked
             error_msg = str(e).lower()
 
             # Check if it's a timeout
@@ -52,6 +52,32 @@ class DatabaseErrorMiddleware(BaseHTTPMiddleware):
                         request=request,
                         user_name="SYSTEM",
                         detail="Database timeout during request",
+                    )
+                except:
+                    pass
+
+                return JSONResponse(
+                    status_code=entry["http_status"],
+                    content={
+                        "detail": {
+                            "error": entry["error"],
+                            "message": entry["message"],
+                            "contacts": entry["contacts"],
+                        }
+                    },
+                )
+
+            # Check if host is blocked (MySQL error 1129)
+            if "1129" in error_msg or "blocked" in error_msg:
+                entry = ERROR_REGISTRY["DB"]["ER_DB_502"]
+
+                try:
+                    audit.error(
+                        "DB",
+                        "ER_DB_502",
+                        request=request,
+                        user_name="SYSTEM",
+                        detail="Host blocked by MySQL due to connection errors",
                     )
                 except:
                     pass
@@ -146,7 +172,7 @@ class DatabaseErrorMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-        except (DatabaseError, DataError) as e:
+        except DataError as e:
             # Query errors, data type errors
             entry = ERROR_REGISTRY["DB"]["ER_DB_6060"]
 

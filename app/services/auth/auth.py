@@ -128,7 +128,11 @@ class EmployeeAuthService:
             entry = ERROR_REGISTRY["AUTH"]["ER_AUTH_1009"]
             raise HTTPException(
                 status_code=entry["http_status"],
-                detail={"message": entry["message"], "contacts": entry.get("contacts")}
+                detail={
+                    "error": entry["error"],
+                    "message": entry["message"], 
+                    "contacts": entry.get("contacts")
+                }
             )
 
         # Verify password (plaintext comparison - TODO: use verify_password() when hashing enabled)
@@ -137,7 +141,11 @@ class EmployeeAuthService:
             entry = ERROR_REGISTRY["AUTH"]["ER_AUTH_1006"]
             raise HTTPException(
                 status_code=entry["http_status"],
-                detail={"message": entry["message"], "contacts": entry.get("contacts")}
+                detail={
+                    "error": entry["error"],
+                    "message": entry["message"], 
+                    "contacts": entry.get("contacts")
+                }
             )
 
         # Check if account is active - use specific inactive error
@@ -145,7 +153,11 @@ class EmployeeAuthService:
             entry = ERROR_REGISTRY["AUTH"]["ER_AUTH_1007"]
             raise HTTPException(
                 status_code=entry["http_status"],
-                detail=entry["message"]  # "Account is inactive. Please contact administrator."
+                detail={
+                    "error": entry["error"],
+                    "message": entry["message"], 
+                    "contacts": entry.get("contacts")
+                }
             )
 
         return employee

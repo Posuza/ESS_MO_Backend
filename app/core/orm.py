@@ -5,7 +5,7 @@ from urllib.parse import quote_plus
 
 from fastapi import HTTPException
 from sqlalchemy import create_engine
-from sqlalchemy.exc import InterfaceError, OperationalError
+from sqlalchemy.exc import DatabaseError, InterfaceError, OperationalError
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from app.core.config import settings
@@ -52,6 +52,25 @@ def _is_db_port_open(timeout: float = 0.3) -> bool:
     except Exception:
         return False
 
+
+def _raise_db_error(error_msg: str = ""):
+    """Map a DB connection error to the correct registry entry and raise HTTPException."""
+    msg_lower = error_msg.lower()
+    if "1129" in msg_lower or "blocked" in msg_lower:
+        entry = ERROR_REGISTRY["DB"]["ER_DB_502"]
+    else:
+        entry = ERROR_REGISTRY["DB"]["ER_DB_501"]
+
+    raise HTTPException(
+        status_code=entry["http_status"],
+        detail={
+            "error": entry["error"],
+            "message": entry["message"],
+            "contacts": entry.get("contacts", []),
+        },
+    )
+
+
 def get_db():
     """FastAPI dependency for database session."""
     if not _is_db_port_open():
@@ -64,10 +83,16 @@ def get_db():
                 "contacts": entry.get("contacts", []),
             },
         )
-    
-    db = SessionLocal()
+
+    try:
+        db = SessionLocal()
+    except (DatabaseError, OperationalError, InterfaceError) as e:
+        _raise_db_error(str(e))
+
     try:
         yield db
+    except (DatabaseError, OperationalError, InterfaceError) as e:
+        _raise_db_error(str(e))
     finally:
         db.close()
 
@@ -85,9 +110,16 @@ def get_session() -> Session:
                 "contacts": entry.get("contacts", []),
             },
         )
-        
-    session = SessionLocal()
+
+    try:
+        session = SessionLocal()
+    except (DatabaseError, OperationalError, InterfaceError) as e:
+        _raise_db_error(str(e))
+
     try:
         yield session
+    except (DatabaseError, OperationalError, InterfaceError) as e:
+        _raise_db_error(str(e))
     finally:
         session.close()
+
