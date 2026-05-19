@@ -2,11 +2,11 @@ from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
-from app.models.sector_report import ApprovedStatusEnum
+from app.models.route_report import ApprovedStatusEnum
 
 
-class SectorReportBase(BaseModel):
-    sector_id: int
+class RouteReportBase(BaseModel):
+    route_id: Optional[int] = None
     leave_sick_count: int = 0
     leave_business_count: int = 0
     leave_other_count: int = 0
@@ -35,11 +35,13 @@ class SectorReportBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class SectorReportCreate(SectorReportBase):
+class RouteReportCreate(RouteReportBase):
+    route_report_id: str
     created_at: Optional[datetime] = None
 
 
-class SectorReportUpdate(BaseModel):
+class RouteReportUpdate(BaseModel):
+    route_id: Optional[int] = None
     leave_sick_count: Optional[int] = None
     leave_business_count: Optional[int] = None
     leave_other_count: Optional[int] = None
@@ -68,8 +70,8 @@ class SectorReportUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class SectorReportResponse(SectorReportBase):
-    id: int
+class RouteReportResponse(RouteReportBase):
+    route_report_id: str
     approved_at: Optional[datetime]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]

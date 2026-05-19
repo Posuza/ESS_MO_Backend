@@ -14,14 +14,6 @@ class Position(Base):
 
     position_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
     position_name: Mapped[str] = mapped_column(String(150), nullable=False)
-    
-    field_id: Mapped[int] = mapped_column(Integer, ForeignKey("fields.field_id"), nullable=False)
-    department_id: Mapped[int] = mapped_column(Integer, ForeignKey("departments.department_id"), nullable=False)
-    division_id: Mapped[int] = mapped_column(Integer, ForeignKey("divisions.division_id"), nullable=False)
-    sector_id: Mapped[int] = mapped_column(Integer, ForeignKey("sectors.sector_id"), nullable=True)
-    zone_id: Mapped[int] = mapped_column(Integer, ForeignKey("zones.zone_id"), nullable=True)
-    route_id: Mapped[int] = mapped_column(Integer, ForeignKey("routes.route_id"), nullable=True)
-    
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text('1'))
     position_detail: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
     

@@ -16,11 +16,11 @@ class ApprovedStatusEnum(str, Enum):
     REJECT = 'REJECT'
 
 
-class SectorReport(Base):
-    __tablename__ = "sector_report"
+class RouteReport(Base):
+    __tablename__ = "route_report"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    sector_id: Mapped[int] = mapped_column(Integer, ForeignKey("sectors.sector_id"), nullable=False)
+    route_report_id: Mapped[str] = mapped_column(String(10), primary_key=True, index=True)
+    route_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("routes.route_id"), nullable=True)
     
     leave_sick_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     leave_business_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

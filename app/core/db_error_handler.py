@@ -1,9 +1,3 @@
-"""
-Database Error Handler Middleware
-
-Catches database errors globally and converts them to proper HTTP responses
-using ERROR_REGISTRY. This prevents database errors from crashing the backend.
-"""
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse

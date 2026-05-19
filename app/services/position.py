@@ -20,12 +20,6 @@ class PositionService:
         with get_session() as session:
             position_entry = Position(
                 position_name=p["position_name"],
-                field_id=p["field_id"],
-                department_id=p["department_id"],
-                division_id=p["division_id"],
-                sector_id=p["sector_id"],
-                zone_id=p["zone_id"],
-                route_id=p["route_id"],
                 is_active=p["is_active"],
                 position_detail=p.get("position_detail"),
                 created_by=p["created_by"],

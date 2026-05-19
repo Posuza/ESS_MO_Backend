@@ -7,16 +7,16 @@ from sqlalchemy import func, select, update
 from app.core.orm import get_session
 from app.models.employee import Employee
 from app.models.position import Position
-from app.models.sector_report import SectorReport, ApprovedStatusEnum
-from app.schemas.sector_report import (
-    SectorReportCreate,
-    SectorReportUpdate,
+from app.models.route_report import RouteReport, ApprovedStatusEnum
+from app.schemas.route_report import (
+    RouteReportCreate,
+    RouteReportUpdate,
 )
 
 
-class SectorReportService:
+class RouteReportService:
     @staticmethod
-    def _row_to_dict(row: SectorReport) -> dict:
+    def _row_to_dict(row: RouteReport) -> dict:
         data = dict(row.__dict__)
         data.pop("_sa_instance_state", None)
         return data
@@ -38,7 +38,7 @@ class SectorReportService:
         return {
             "employee_code": employee.employee_code,
             "role_id": employee.role_id,
-            "sector_id": employee.sector_id,
+            "routes_id": employee.routes_id,
             "position_name": (position_name or "").strip().lower(),
         }
 
@@ -54,18 +54,18 @@ class SectorReportService:
         position_name = actor["position_name"]
         return (role_id in {1, 9, 99}) or ("admin" in position_name)
 
-    def _enforce_same_sector(self, actor: dict, target_sector_id: Optional[int]) -> None:
+    def _enforce_same_route(self, actor: dict, target_route_id: Optional[int]) -> None:
         if self._is_admin(actor):
             return
-        if target_sector_id is None:
-            raise HTTPException(status_code=403, detail="Sector is required for access control")
-        if actor["sector_id"] != target_sector_id:
-            raise HTTPException(status_code=403, detail="You can only access reports in your own sector")
+        if target_route_id is None:
+            raise HTTPException(status_code=403, detail="Route is required for access control")
+        if actor["routes_id"] != target_route_id:
+            raise HTTPException(status_code=403, detail="You can only access reports in your own route")
 
     def list_reports(
         self,
         actor_employee_code: str,
-        sector_id: Optional[int] = None,
+        route_id: Optional[int] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         status: Optional[ApprovedStatusEnum] = None,
@@ -75,46 +75,46 @@ class SectorReportService:
     ) -> list[dict]:
         actor = self._resolve_actor(actor_employee_code)
         if not self._is_admin(actor):
-            if sector_id is not None and sector_id != actor["sector_id"]:
-                raise HTTPException(status_code=403, detail="You can only list reports in your own sector")
-            sector_id = actor["sector_id"]
+            if route_id is not None and route_id != actor["routes_id"]:
+                raise HTTPException(status_code=403, detail="You can only list reports in your own route")
+            route_id = actor["routes_id"]
 
         with get_session() as session:
-            stmt = select(SectorReport)
+            stmt = select(RouteReport)
             
-            if sector_id is not None:
-                stmt = stmt.where(SectorReport.sector_id == sector_id)
+            if route_id is not None:
+                stmt = stmt.where(RouteReport.route_id == route_id)
             if start_date:
-                stmt = stmt.where(SectorReport.created_at >= start_date)
+                stmt = stmt.where(RouteReport.created_at >= start_date)
             if end_date:
-                # If end_date is just a date (midnight), include the entire day
                 if end_date.hour == 0 and end_date.minute == 0 and end_date.second == 0:
                     end_date = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
-                stmt = stmt.where(SectorReport.created_at <= end_date)
+                stmt = stmt.where(RouteReport.created_at <= end_date)
             if status:
-                stmt = stmt.where(SectorReport.approved_status == status)
+                stmt = stmt.where(RouteReport.approved_status == status)
             if created_by:
-                stmt = stmt.where(SectorReport.created_by == created_by)
+                stmt = stmt.where(RouteReport.created_by == created_by)
             if min_absent is not None:
-                stmt = stmt.where(SectorReport.absent_count >= min_absent)
+                stmt = stmt.where(RouteReport.absent_count >= min_absent)
             if max_absent is not None:
-                stmt = stmt.where(SectorReport.absent_count <= max_absent)
+                stmt = stmt.where(RouteReport.absent_count <= max_absent)
 
             rows = session.execute(
-                stmt.order_by(SectorReport.created_at.desc())
+                stmt.order_by(RouteReport.created_at.desc())
             ).scalars().all()
-            print(f"--- list_reports: sector={sector_id}, start={start_date}, end={end_date} ---")
+            print(f"--- list_reports: route={route_id}, start={start_date}, end={end_date} ---")
             print(f"Found {len(rows)} records.")
             return [self._row_to_dict(row) for row in rows]
 
-    def create_report(self, payload: SectorReportCreate, actor_employee_code: str) -> dict:
+    def create_report(self, payload: RouteReportCreate, actor_employee_code: str) -> dict:
         p = payload.model_dump()
         actor = self._resolve_actor(actor_employee_code)
-        self._enforce_same_sector(actor, p["sector_id"])
+        self._enforce_same_route(actor, p["route_id"])
 
         with get_session() as session:
-            report = SectorReport(
-                sector_id=p["sector_id"],
+            report = RouteReport(
+                route_report_id=p["route_report_id"],
+                route_id=p["route_id"],
                 leave_sick_count=p["leave_sick_count"],
                 leave_business_count=p["leave_business_count"],
                 leave_other_count=p["leave_other_count"],
@@ -135,7 +135,6 @@ class SectorReportService:
                 other_training=p.get("other_training"),
                 other_training_count=p["other_training_count"],
                 other_extral=p.get("other_extral"),
-                # Always start in PENDING on create.
                 approved_by="",
                 approved_status=ApprovedStatusEnum.PENDING,
                 approved_remark=None,
@@ -148,32 +147,32 @@ class SectorReportService:
             session.commit()
             session.refresh(report)
             ret_data = self._row_to_dict(report)
-            print(f"--- create_report: created ID {report.id} for sector {report.sector_id} ---")
+            print(f"--- create_report: created ID {report.route_report_id} for route {report.route_id} ---")
             return ret_data
 
-    def get_report(self, report_id: int) -> dict:
+    def get_report(self, route_report_id: str) -> dict:
         with get_session() as session:
             row = session.execute(
-                select(SectorReport).where(SectorReport.id == report_id)
+                select(RouteReport).where(RouteReport.route_report_id == route_report_id)
             ).scalars().first()
         if not row:
-            raise HTTPException(status_code=404, detail="Sector report not found")
+            raise HTTPException(status_code=404, detail="Route report not found")
         return self._row_to_dict(row)
 
-    def get_report_for_actor(self, report_id: int, actor_employee_code: str) -> dict:
+    def get_report_for_actor(self, route_report_id: str, actor_employee_code: str) -> dict:
         actor = self._resolve_actor(actor_employee_code)
-        row = self.get_report(report_id)
-        row_sector_id = row.get("sector_id")
-        self._enforce_same_sector(actor, row_sector_id)
+        row = self.get_report(route_report_id)
+        row_route_id = row.get("route_id")
+        self._enforce_same_route(actor, row_route_id)
         return row
 
-    def update_report(self, report_id: int, payload: SectorReportUpdate, actor_employee_code: str) -> dict:
+    def update_report(self, route_report_id: str, payload: RouteReportUpdate, actor_employee_code: str) -> dict:
         actor = self._resolve_actor(actor_employee_code)
         with get_session() as session:
-            existing = session.execute(select(SectorReport).where(SectorReport.id == report_id)).scalars().first()
+            existing = session.execute(select(RouteReport).where(RouteReport.route_report_id == route_report_id)).scalars().first()
             if not existing:
-                raise HTTPException(status_code=404, detail="Sector report not found")
-            self._enforce_same_sector(actor, existing.sector_id)
+                raise HTTPException(status_code=404, detail="Route report not found")
+            self._enforce_same_route(actor, existing.route_id)
 
         updates = payload.model_dump(exclude_unset=True)
         if not updates:
@@ -200,23 +199,23 @@ class SectorReportService:
                 updates["approved_at"] = func.now()
 
         with get_session() as session:
-            session.execute(update(SectorReport).where(SectorReport.id == report_id).values(**updates))
+            session.execute(update(RouteReport).where(RouteReport.route_report_id == route_report_id).values(**updates))
             session.commit()
 
-        return self.get_report_for_actor(report_id, actor_employee_code=actor_employee_code)
+        return self.get_report_for_actor(route_report_id, actor_employee_code=actor_employee_code)
 
-    def delete_report(self, report_id: int, actor_employee_code: str) -> dict:
+    def delete_report(self, route_report_id: str, actor_employee_code: str) -> dict:
         actor = self._resolve_actor(actor_employee_code)
         with get_session() as session:
             report = session.execute(
-                select(SectorReport).where(SectorReport.id == report_id)
+                select(RouteReport).where(RouteReport.route_report_id == route_report_id)
             ).scalars().first()
             
             if not report:
-                raise HTTPException(status_code=404, detail="Sector report not found")
-            self._enforce_same_sector(actor, report.sector_id)
+                raise HTTPException(status_code=404, detail="Route report not found")
+            self._enforce_same_route(actor, report.route_id)
                 
             session.delete(report)
             session.commit()
             
-        return {"detail": "Sector report deleted successfully"}
+        return {"detail": "Route report deleted successfully"}

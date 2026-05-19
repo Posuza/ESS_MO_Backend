@@ -11,7 +11,6 @@ from app.core.registries.error_registry import ERROR_REGISTRY
 class EmployeeService:
     def list_employees(
         self,
-        sector_id: Optional[int] = None,
         department_id: Optional[int] = None,
         division_id: Optional[int] = None,
         field_id: Optional[int] = None,
@@ -21,8 +20,6 @@ class EmployeeService:
         with get_session() as session:
             stmt = select(Employee)
             
-            if sector_id is not None:
-                stmt = stmt.where(Employee.sector_id == sector_id)
             if department_id is not None:
                 stmt = stmt.where(Employee.department_id == department_id)
             if division_id is not None:
@@ -82,8 +79,6 @@ class EmployeeService:
                 department_id=p["department_id"],
                 division_id=p["division_id"],
                 position_id=p["position_id"],
-                sector_id=p.get("sector_id"),
-                zone_id=p.get("zone_id"),
                 routes_id=p.get("routes_id"),
                 shift_id=p["shift_id"],
                 is_active=p["is_active"],

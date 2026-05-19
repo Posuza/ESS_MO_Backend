@@ -19,16 +19,16 @@ async def create_log(request: PositionChangeLogCreate):
     return service.create_log(request)
 
 
-@router.get("/{log_id}", response_model=PositionChangeLogResponse)
-async def get_log(log_id: int):
-    return service.get_log(log_id)
+@router.get("/{position_log_id}", response_model=PositionChangeLogResponse)
+async def get_log(position_log_id: int):
+    return service.get_log(position_log_id)
 
 
-@router.patch("/{log_id}", response_model=PositionChangeLogResponse)
-async def update_log(log_id: int, request: PositionChangeLogUpdate):
-    return service.update_log(log_id, request)
+@router.patch("/{position_log_id}", response_model=PositionChangeLogResponse)
+async def update_log(position_log_id: int, request: PositionChangeLogUpdate):
+    return service.update_log(position_log_id, request)
 
 
-@router.delete("/{log_id}")
-async def delete_log(log_id: int):
-    return service.delete_log(log_id)
+@router.delete("/{position_log_id}")
+async def delete_log(position_log_id: int):
+    return service.delete_log(position_log_id)

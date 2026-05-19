@@ -33,8 +33,6 @@ class Employee(Base):
     division_id: Mapped[int] = mapped_column(Integer, ForeignKey("divisions.division_id"), nullable=False)
     position_id: Mapped[int] = mapped_column(Integer, ForeignKey("positions.position_id"), nullable=False)
     
-    sector_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("sectors.sector_id"), nullable=True)
-    zone_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("zones.zone_id"), nullable=True)
     routes_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("routes.route_id"), nullable=True)
     
     shift_id: Mapped[int] = mapped_column(Integer, ForeignKey("shifts.shift_id"), nullable=False)

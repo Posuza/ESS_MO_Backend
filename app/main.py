@@ -17,10 +17,8 @@ from app.api.endpoints import (
     postal_code,
     province,
     route,
-    sector,
-    sector_report,
+    route_report,
     sub_district,
-    zone,
 )
 from app.api.endpoints.auth import auth, forgot_password
 from app.core.config import settings
@@ -44,22 +42,20 @@ app = FastAPI(
 
     | no | Name                | list | get1 | update | delete |
     |----|---------------------|------|------|--------|--------|
-    | 1  | sector              | true | true | true   | true   |
-    | 2  | zone                | true | true | true   | true   |
-    | 3  | route               | true | true | true   | true   |
-    | 4  | position            | true | true | true   | true   |
-    | 5  | position_change_log | true | true | true   | true   |
-    | 6  | name_prefix         | true | true | true   | true   |
-    | 7  | address             | true | true | true   | true   |
-    | 8  | province            | true | true | true   | true   |
-    | 9  | district            | true | true | true   | true   |
-    | 10 | sub_district        | true | true | true   | true   |
-    | 11 | postal_code         | true | true | true   | true   |
-    | 12 | department          | true | true | true   | true   |
-    | 13 | division            | true | true | true   | true   |
-    | 14 | employee            | true | true | true   | true   |
-    | 15 | field               | true | true | true   | true   |
-    | 16 | sector_report       | true | true | true   | true   |
+    | 1  | route               | true | true | true   | true   |
+    | 2  | position            | true | true | true   | true   |
+    | 3  | position_change_log | true | true | true   | true   |
+    | 4  | name_prefix         | true | true | true   | true   |
+    | 5  | address             | true | true | true   | true   |
+    | 6  | province            | true | true | true   | true   |
+    | 7  | district            | true | true | true   | true   |
+    | 8  | sub_district        | true | true | true   | true   |
+    | 9  | postal_code         | true | true | true   | true   |
+    | 10 | department          | true | true | true   | true   |
+    | 11 | division            | true | true | true   | true   |
+    | 12 | employee            | true | true | true   | true   |
+    | 13 | field               | true | true | true   | true   |
+    | 14 | route_report        | true | true | true   | true   |
 
 
     """,
@@ -94,13 +90,11 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(forgot_password.router, prefix="/api/v1")
 
 # Other endpoints (with /api/v1 prefix)
-app.include_router(sector_report.router, prefix="/api/v1")
+app.include_router(route_report.router, prefix="/api/v1")
 app.include_router(employee.router, prefix="/api/v1")
 app.include_router(field.router, prefix="/api/v1")
 app.include_router(department.router, prefix="/api/v1")
 app.include_router(division.router, prefix="/api/v1")
-app.include_router(sector.router, prefix="/api/v1")
-app.include_router(zone.router, prefix="/api/v1")
 app.include_router(route.router, prefix="/api/v1")
 app.include_router(position.router, prefix="/api/v1")
 app.include_router(position_change_log.router, prefix="/api/v1")

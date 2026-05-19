@@ -17,8 +17,6 @@ class Route(Base):
     field_id: Mapped[int] = mapped_column(Integer, ForeignKey("fields.field_id"), nullable=False)
     department_id: Mapped[int] = mapped_column(Integer, ForeignKey("departments.department_id"), nullable=False)
     division_id: Mapped[int] = mapped_column(Integer, ForeignKey("divisions.division_id"), nullable=False)
-    sector_id: Mapped[int] = mapped_column(Integer, ForeignKey("sectors.sector_id"), nullable=False)
-    zone_id: Mapped[int] = mapped_column(Integer, ForeignKey("zones.zone_id"), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text('1'))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

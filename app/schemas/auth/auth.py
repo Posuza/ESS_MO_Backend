@@ -37,8 +37,6 @@ class EmployeeRegister(BaseModel):
     
     # Optional foreign keys
     address_id: Optional[int] = None
-    sector_id: Optional[int] = None
-    zone_id: Optional[int] = None
     routes_id: Optional[int] = None
     
     # Optional dates
@@ -72,8 +70,10 @@ class EmployeeInfo(BaseModel):
     email: Optional[str]
     first_name: str
     last_name: str
-    role_id: int
-    is_active: bool
+    role_name: str
+    name_prefix: str
+    position_name: str
+    routes_id: Optional[int] = None
 
 
 class LoginResponse(BaseModel):

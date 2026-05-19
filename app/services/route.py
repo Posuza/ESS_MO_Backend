@@ -23,8 +23,6 @@ class RouteService:
                 field_id=p["field_id"],
                 department_id=p["department_id"],
                 division_id=p["division_id"],
-                sector_id=p["sector_id"],
-                zone_id=p["zone_id"],
                 is_active=p["is_active"],
                 created_by=p["created_by"],
                 updated_by=p["created_by"],  # Mirror created_by on init

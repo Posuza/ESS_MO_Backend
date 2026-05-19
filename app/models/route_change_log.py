@@ -19,16 +19,12 @@ class RouteChangeLog(Base):
     from_field: Mapped[str] = mapped_column(String(50), nullable=False)
     from_department: Mapped[str] = mapped_column(String(50), nullable=False)
     from_division: Mapped[str] = mapped_column(String(50), nullable=False)
-    from_sector: Mapped[str] = mapped_column(String(50), nullable=False)
-    from_zone: Mapped[str] = mapped_column(String(50), nullable=False)
     from_routes: Mapped[str] = mapped_column(String(50), nullable=False)
     from_shift: Mapped[str] = mapped_column(String(50), nullable=False)
     
     to_field: Mapped[str] = mapped_column(String(50), nullable=False)
     to_department: Mapped[str] = mapped_column(String(50), nullable=False)
     to_division: Mapped[str] = mapped_column(String(50), nullable=False)
-    to_sector: Mapped[str] = mapped_column(String(50), nullable=False)
-    to_zone: Mapped[str] = mapped_column(String(50), nullable=False)
     to_routes: Mapped[str] = mapped_column(String(50), nullable=False)
     to_shift: Mapped[str] = mapped_column(String(50), nullable=False)
     

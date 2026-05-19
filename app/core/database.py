@@ -4,13 +4,11 @@ import logging
 from sqlalchemy.exc import OperationalError, DatabaseError, InterfaceError, DBAPIError
 from app.core.orm import Base, engine, _is_db_port_open
 from app.core.registries.error_registry import ERROR_REGISTRY
-import app.models.sector_report
+import app.models.route_report
 import app.models.employee
 import app.models.field
 import app.models.department
 import app.models.division
-import app.models.sector
-import app.models.zone
 import app.models.route
 import app.models.position
 import app.models.position_change_log
@@ -20,6 +18,7 @@ import app.models.province
 import app.models.district
 import app.models.sub_district
 import app.models.postal_code
+import app.models.audit_log
 
 logger = logging.getLogger(__name__)
 

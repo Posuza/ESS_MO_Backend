@@ -9,6 +9,9 @@ from app.schemas.auth.auth import (
     LogoutResponse
 )
 from app.models.employee import Employee
+from app.models.roles import Role
+from app.models.position import Position
+from app.models.name_prefix import NamePrefix
 from app.core.orm import get_db
 from app.core.audit_logger import audit, _extract_request_context
 from app.core.registries.error_registry import ERROR_REGISTRY
@@ -45,8 +48,6 @@ async def employee_register(
             position_id=employee_data.position_id,
             shift_id=employee_data.shift_id,
             address_id=employee_data.address_id,
-            sector_id=employee_data.sector_id,
-            zone_id=employee_data.zone_id,
             routes_id=employee_data.routes_id,
             start_date=employee_data.start_date,
             leave_date=employee_data.leave_date,
@@ -111,6 +112,15 @@ async def employee_login(
             resource="Employee"
         )
         
+        # Resolve names instead of IDs
+        db_role = db.query(Role).filter(Role.role_id == employee.role_id).first()
+        db_position = db.query(Position).filter(Position.position_id == employee.position_id).first()
+        db_prefix = db.query(NamePrefix).filter(NamePrefix.prefix_id == employee.name_prefix_id).first()
+
+        role_name = db_role.role_name if db_role else ""
+        position_name = db_position.position_name if db_position else ""
+        prefix_name = db_prefix.prefix_name if db_prefix else ""
+
         # Return employee info only (no tokens)
         return {
             "employee": {
@@ -118,8 +128,10 @@ async def employee_login(
                 "email": employee.email,
                 "first_name": employee.first_name,
                 "last_name": employee.last_name,
-                "role_id": employee.role_id,
-                "is_active": employee.is_active
+                "role_name": role_name,
+                "name_prefix": prefix_name,
+                "position_name": position_name,
+                "routes_id": employee.routes_id
             },
             "message": "Login successful"
         }

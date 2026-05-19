@@ -9,8 +9,6 @@ class RouteBase(BaseModel):
     field_id: int
     department_id: int
     division_id: int
-    sector_id: int
-    zone_id: int
     is_active: bool = True
     created_by: str = Field(..., max_length=6)
 
@@ -24,8 +22,6 @@ class RouteUpdate(BaseModel):
     field_id: Optional[int] = None
     department_id: Optional[int] = None
     division_id: Optional[int] = None
-    sector_id: Optional[int] = None
-    zone_id: Optional[int] = None
     is_active: Optional[bool] = None
     updated_by: str = Field(..., max_length=6)
 

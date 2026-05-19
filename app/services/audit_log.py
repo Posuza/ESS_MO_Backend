@@ -9,10 +9,12 @@ from app.schemas.audit_log import AuditLogCreate
 
 class AuditLogService:
 
-    def create(self, payload: AuditLogCreate) -> dict:
+    def create(self, payload: AuditLogCreate | dict) -> dict:
         """Persist a single audit log entry and return it as a dict."""
         with get_session() as session:
-            log = AuditLog(**payload.model_dump())
+            # Handle both Pydantic schema and raw dictionary input for Clean Architecture compliance
+            data = payload.model_dump() if hasattr(payload, "model_dump") else payload
+            log = AuditLog(**data)
             session.add(log)
             session.commit()
             session.refresh(log)

@@ -11,7 +11,6 @@ service = EmployeeService()
 
 @router.get("/", response_model=List[EmployeeResponse])
 async def list_employees(
-    sector_id: Optional[int] = Query(None),
     department_id: Optional[int] = Query(None),
     division_id: Optional[int] = Query(None),
     field_id: Optional[int] = Query(None),
@@ -19,7 +18,6 @@ async def list_employees(
     is_active: Optional[bool] = Query(None)
 ):
     return service.list_employees(
-        sector_id=sector_id,
         department_id=department_id,
         division_id=division_id,
         field_id=field_id,

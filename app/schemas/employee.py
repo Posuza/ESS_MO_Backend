@@ -19,8 +19,6 @@ class EmployeeBase(BaseModel):
     department_id: int
     division_id: int
     position_id: int
-    sector_id: Optional[int] = None
-    zone_id: Optional[int] = None
     routes_id: Optional[int] = None
     shift_id: int
     is_active: bool = True
@@ -48,8 +46,6 @@ class EmployeeUpdate(BaseModel):
     department_id: Optional[int] = None
     division_id: Optional[int] = None
     position_id: Optional[int] = None
-    sector_id: Optional[int] = None
-    zone_id: Optional[int] = None
     routes_id: Optional[int] = None
     shift_id: Optional[int] = None
     is_active: Optional[bool] = None
