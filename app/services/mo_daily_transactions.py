@@ -177,20 +177,10 @@ class MoDailyTransactionService:
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
 
-        is_manager = self._is_manager_or_admin(actor)
-        if not is_manager:
-            forbidden_for_staff = {"approved_status", "approved_remark", "approved_by", "approved_at", "created_by"}
-            passed_forbidden = forbidden_for_staff.intersection(updates.keys())
-            if passed_forbidden:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Only manager/admin can update approval fields: {', '.join(sorted(passed_forbidden))}",
-                )
-
         updates["updated_at"] = func.now()
         updates["updated_by"] = actor["employee_code"]
 
-        if is_manager and "approved_status" in updates:
+        if "approved_status" in updates:
             approved_status = updates["approved_status"]
             if approved_status in {ApprovedStatusEnum.APPROVED, ApprovedStatusEnum.REJECT}:
                 if "approved_by" not in updates:
