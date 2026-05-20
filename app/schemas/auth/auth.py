@@ -72,8 +72,10 @@ class EmployeeInfo(BaseModel):
     last_name: str
     role_name: str
     name_prefix: str
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
     position_name: str
-    routes_id: Optional[int] = None
+    position_id: Optional[int] = None
 
 
 class LoginResponse(BaseModel):

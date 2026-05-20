@@ -7,8 +7,8 @@ from typing import Optional
 from fastapi import Request
 
 from app.core.registries import ACTION_REGISTRY, ERROR_REGISTRY
-from app.schemas.audit_log import AuditLogCreate
-from app.services.audit_log import AuditLogService
+from app.schemas.audit_logs import AuditLogCreate
+from app.services.audit_logs import AuditLogService
 
 _logger = logging.getLogger(__name__)
 _service = AuditLogService()

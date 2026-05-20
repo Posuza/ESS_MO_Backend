@@ -8,10 +8,11 @@ from app.schemas.auth.auth import (
     LoginResponse,
     LogoutResponse
 )
-from app.models.employee import Employee
+from app.models.employees import Employee
 from app.models.roles import Role
-from app.models.position import Position
-from app.models.name_prefix import NamePrefix
+from app.models.positions import Position
+from app.models.name_prefixs import NamePrefix
+from app.models.departments import Department
 from app.core.orm import get_db
 from app.core.audit_logger import audit, _extract_request_context
 from app.core.registries.error_registry import ERROR_REGISTRY
@@ -116,10 +117,12 @@ async def employee_login(
         db_role = db.query(Role).filter(Role.role_id == employee.role_id).first()
         db_position = db.query(Position).filter(Position.position_id == employee.position_id).first()
         db_prefix = db.query(NamePrefix).filter(NamePrefix.prefix_id == employee.name_prefix_id).first()
+        db_dept = db.query(Department).filter(Department.department_id == employee.department_id).first()
 
         role_name = db_role.role_name if db_role else ""
         position_name = db_position.position_name if db_position else ""
         prefix_name = db_prefix.prefix_name if db_prefix else ""
+        department_name = db_dept.department_name if db_dept else ""
 
         # Return employee info only (no tokens)
         return {
@@ -131,7 +134,9 @@ async def employee_login(
                 "role_name": role_name,
                 "name_prefix": prefix_name,
                 "position_name": position_name,
-                "routes_id": employee.routes_id
+                "department_id": employee.department_id,
+                "position_id": employee.position_id,
+                "department_name": department_name
             },
             "message": "Login successful"
         }

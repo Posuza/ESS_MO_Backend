@@ -1,5 +1,5 @@
 from app.core.orm import get_session
-from app.models.employee import Employee
+from app.models.employees import Employee
 from app.services.email import send_plain_password_email
 from fastapi import BackgroundTasks
 from sqlalchemy import select

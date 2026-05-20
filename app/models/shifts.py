@@ -39,6 +39,7 @@ class Shift(Base):
     checkout_open_after_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text('1'))
+    mark_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text('0'))
 
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
@@ -46,14 +47,14 @@ class Shift(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        server_default=text('CURRENT_TIMESTAMP(6)'),
+        server_default=text('CURRENT_TIMESTAMP'),
         default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        server_default=text('CURRENT_TIMESTAMP(6)'),
-        server_onupdate=text('CURRENT_TIMESTAMP(6)'),
+        server_default=text('CURRENT_TIMESTAMP'),
+        server_onupdate=text('CURRENT_TIMESTAMP'),
         default=func.now(),
         onupdate=func.now(),
     )

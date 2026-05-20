@@ -4,7 +4,7 @@ from app.core.audit_logger import audit
 from app.core.orm import get_session
 from app.core.registries.error_registry import ERROR_REGISTRY
 from app.core.security.reset_password import create_reset_token, decode_reset_token
-from app.models.employee import Employee
+from app.models.employees import Employee
 from app.schemas.auth.reset_password import (
     ForgotPasswordRequest,
     MessageResponse,

@@ -9,12 +9,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.orm import Base
 
 
-class Role(Base):
-    __tablename__ = "roles"
+class SubDistrict(Base):
+    __tablename__ = "sub_districts"
 
-    role_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    role_name: Mapped[str] = mapped_column(String(100), nullable=False)
-
+    sub_district_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    sub_district_name: Mapped[str] = mapped_column(String(225), nullable=False)
+    province_id: Mapped[int] = mapped_column(Integer, ForeignKey("provinces.province_id"), nullable=False)
+    district_id: Mapped[int] = mapped_column(Integer, ForeignKey("district.district_id"), nullable=False)
+    
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -29,6 +31,6 @@ class Role(Base):
         default=func.now(),
         onupdate=func.now(),
     )
-
-    created_by: Mapped[str] = mapped_column(String(6), ForeignKey("employees.employee_code"), nullable=False)
+    
+    created_by: Mapped[Optional[str]] = mapped_column(String(6), ForeignKey("employees.employee_code"), nullable=True)
     updated_by: Mapped[Optional[str]] = mapped_column(String(6), ForeignKey("employees.employee_code"), nullable=True)

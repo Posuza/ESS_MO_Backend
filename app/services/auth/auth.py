@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
-from app.models.employee import Employee
+from app.models.employees import Employee
 # from app.core.security import get_password_hash  # TODO: Enable when ready for hashing
 from app.core.registries.error_registry import ERROR_REGISTRY
 

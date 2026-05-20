@@ -4,22 +4,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.endpoints import (
-    address,
-    department,
-    district,
-    division,
-    employee,
-    field,
-    name_prefix,
-    position,
-    position_change_log,
-    postal_code,
-    province,
-    route,
-    route_report,
-    sub_district,
-)
+from app.api.endpoints import mo_daily_transactions
 from app.api.endpoints.auth import auth, forgot_password
 from app.core.config import settings
 from app.core.database import init_db
@@ -42,20 +27,7 @@ app = FastAPI(
 
     | no | Name                | list | get1 | update | delete |
     |----|---------------------|------|------|--------|--------|
-    | 1  | route               | true | true | true   | true   |
-    | 2  | position            | true | true | true   | true   |
-    | 3  | position_change_log | true | true | true   | true   |
-    | 4  | name_prefix         | true | true | true   | true   |
-    | 5  | address             | true | true | true   | true   |
-    | 6  | province            | true | true | true   | true   |
-    | 7  | district            | true | true | true   | true   |
-    | 8  | sub_district        | true | true | true   | true   |
-    | 9  | postal_code         | true | true | true   | true   |
-    | 10 | department          | true | true | true   | true   |
-    | 11 | division            | true | true | true   | true   |
-    | 12 | employee            | true | true | true   | true   |
-    | 13 | field               | true | true | true   | true   |
-    | 14 | route_report        | true | true | true   | true   |
+    | 14 | mo_daily_transactions | true | true | true   | true   |
 
 
     """,
@@ -90,20 +62,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(forgot_password.router, prefix="/api/v1")
 
 # Other endpoints (with /api/v1 prefix)
-app.include_router(route_report.router, prefix="/api/v1")
-app.include_router(employee.router, prefix="/api/v1")
-app.include_router(field.router, prefix="/api/v1")
-app.include_router(department.router, prefix="/api/v1")
-app.include_router(division.router, prefix="/api/v1")
-app.include_router(route.router, prefix="/api/v1")
-app.include_router(position.router, prefix="/api/v1")
-app.include_router(position_change_log.router, prefix="/api/v1")
-app.include_router(name_prefix.router, prefix="/api/v1")
-app.include_router(address.router, prefix="/api/v1")
-app.include_router(province.router, prefix="/api/v1")
-app.include_router(district.router, prefix="/api/v1")
-app.include_router(sub_district.router, prefix="/api/v1")
-app.include_router(postal_code.router, prefix="/api/v1")
+app.include_router(mo_daily_transactions.router, prefix="/api/v1")
 
 
 @app.get("/")
