@@ -1,11 +1,11 @@
-from typing import Optional, List
-from fastapi import HTTPException
+from typing import List, Optional
+
 from sqlalchemy import func, select, update
 
+from app.core import response
 from app.core.orm import get_session
 from app.models.employees import Employee
 from app.schemas.employees import EmployeeCreate, EmployeeUpdate
-from app.core.registries.error_registry import ERROR_REGISTRY
 
 
 class EmployeeService:
@@ -15,11 +15,11 @@ class EmployeeService:
         division_id: Optional[int] = None,
         field_id: Optional[int] = None,
         role_id: Optional[int] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
     ) -> list[dict]:
         with get_session() as session:
             stmt = select(Employee)
-            
+
             if department_id is not None:
                 stmt = stmt.where(Employee.department_id == department_id)
             if division_id is not None:
@@ -30,38 +30,34 @@ class EmployeeService:
                 stmt = stmt.where(Employee.role_id == role_id)
             if is_active is not None:
                 stmt = stmt.where(Employee.is_active == is_active)
-                
-            rows = session.execute(
-                stmt.order_by(Employee.created_at.desc())
-            ).scalars().all()
+
+            rows = (
+                session.execute(stmt.order_by(Employee.created_at.desc()))
+                .scalars()
+                .all()
+            )
             return [row.__dict__ for row in rows]
 
     def create_employee(self, payload: EmployeeCreate) -> dict:
         p = payload.model_dump()
-        
+
         with get_session() as session:
             # Check for existing employee code
             existing = session.execute(
-                select(Employee.employee_code).where(Employee.employee_code == p["employee_code"])
+                select(Employee.employee_code).where(
+                    Employee.employee_code == p["employee_code"]
+                )
             ).first()
             if existing:
-                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2004"]
-                raise HTTPException(
-                    status_code=entry["http_status"],
-                    detail=entry["message"]  # Use registry message
-                )
-                
+                raise response.error("CLIENT.ER_CLIENT_2004")
+
             # Check for existing email if provided
             if p.get("email"):
                 existing_email = session.execute(
                     select(Employee.employee_code).where(Employee.email == p["email"])
                 ).first()
                 if existing_email:
-                    entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2004"]
-                    raise HTTPException(
-                        status_code=entry["http_status"],
-                        detail=entry["message"]  # Use registry message
-                    )
+                    raise response.error("CLIENT.ER_CLIENT_2004")
 
             employee = Employee(
                 employee_code=p["employee_code"],
@@ -87,7 +83,7 @@ class EmployeeService:
                 created_by=p["created_by"],
                 updated_by=p["created_by"],  # Can mirror created_by initially
                 created_at=func.now(),
-                updated_at=func.now()
+                updated_at=func.now(),
             )
             session.add(employee)
             session.commit()
@@ -96,36 +92,30 @@ class EmployeeService:
 
     def get_employee(self, employee_code: str) -> dict:
         with get_session() as session:
-            row = session.execute(
-                select(Employee).where(Employee.employee_code == employee_code)
-            ).scalars().first()
-        if not row:
-            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
-            raise HTTPException(
-                status_code=entry["http_status"],
-                detail=entry["message"]  # Use registry message
+            row = (
+                session.execute(
+                    select(Employee).where(Employee.employee_code == employee_code)
+                )
+                .scalars()
+                .first()
             )
+        if not row:
+            raise response.error("CLIENT.ER_CLIENT_2002")
         return row.__dict__
 
     def update_employee(self, employee_code: str, payload: EmployeeUpdate) -> dict:
         with get_session() as session:
             existing = session.execute(
-                select(Employee.employee_code).where(Employee.employee_code == employee_code)
+                select(Employee.employee_code).where(
+                    Employee.employee_code == employee_code
+                )
             ).first()
             if not existing:
-                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
-                raise HTTPException(
-                    status_code=entry["http_status"],
-                    detail=entry["message"]  # Use registry message
-                )
+                raise response.error("CLIENT.ER_CLIENT_2002")
 
         updates = payload.model_dump(exclude_unset=True)
         if not updates:
-            entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2001"]
-            raise HTTPException(
-                status_code=entry["http_status"],
-                detail=entry["message"]  # Use registry message
-            )
+            raise response.error("CLIENT.ER_CLIENT_2001")
 
         # Track profile picture update timestamp automatically
         if "profile_image_path" in updates:
@@ -134,25 +124,29 @@ class EmployeeService:
         updates["updated_at"] = func.now()
 
         with get_session() as session:
-            session.execute(update(Employee).where(Employee.employee_code == employee_code).values(**updates))
+            session.execute(
+                update(Employee)
+                .where(Employee.employee_code == employee_code)
+                .values(**updates)
+            )
             session.commit()
 
         return self.get_employee(employee_code)
 
     def delete_employee(self, employee_code: str) -> dict:
         with get_session() as session:
-            employee = session.execute(
-                select(Employee).where(Employee.employee_code == employee_code)
-            ).scalars().first()
-            
-            if not employee:
-                entry = ERROR_REGISTRY["CLIENT"]["ER_CLIENT_2002"]
-                raise HTTPException(
-                    status_code=entry["http_status"],
-                    detail=entry["message"]  # Use registry message
+            employee = (
+                session.execute(
+                    select(Employee).where(Employee.employee_code == employee_code)
                 )
-                
+                .scalars()
+                .first()
+            )
+
+            if not employee:
+                raise response.error("CLIENT.ER_CLIENT_2002")
+
             session.delete(employee)
             session.commit()
-            
+
         return {"detail": "Employee deleted successfully"}

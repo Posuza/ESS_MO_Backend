@@ -1,0 +1,44 @@
+[
+    {
+        "column_name": "checkpoint_schedule_change_id",
+        "data_type": "INTEGER",
+        "is_primary_key": true,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "employee_code",
+        "data_type": "VARCHAR(6)",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "schedule_id",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "user_name",
+        "data_type": "VARCHAR(150)",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "action",
+        "data_type": "VARCHAR(50)",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "created_at",
+        "data_type": "DATETIME",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "CURRENT_TIMESTAMP"
+    }
+]

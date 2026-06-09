@@ -1,0 +1,100 @@
+[
+    {
+        "column_name": "schedule_item_id",
+        "data_type": "INTEGER",
+        "is_primary_key": true,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "schedule_id",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "route_site_location_id",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "sequence_no",
+        "data_type": "SMALLINT",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'1'"
+    },
+    {
+        "column_name": "plan_day",
+        "data_type": "SMALLINT",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "require_call",
+        "data_type": "TINYINT",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "is_active",
+        "data_type": "TINYINT",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'1'"
+    },
+    {
+        "column_name": "mark_flag",
+        "data_type": "TINYINT",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "active_route_site_location_id",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    },
+    {
+        "column_name": "active_sequence_no",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    },
+    {
+        "column_name": "created_at",
+        "data_type": "DATETIME",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "CURRENT_TIMESTAMP"
+    },
+    {
+        "column_name": "updated_at",
+        "data_type": "DATETIME",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+    },
+    {
+        "column_name": "created_by",
+        "data_type": "VARCHAR(6)",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "updated_by",
+        "data_type": "VARCHAR(6)",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    }
+]

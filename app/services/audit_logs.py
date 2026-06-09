@@ -2,13 +2,12 @@ from typing import Optional
 
 from sqlalchemy import func, select
 
-from app.core.orm import get_session
+from app.core.db.session import get_session
 from app.models.audit_logs import AuditLog
 from app.schemas.audit_logs import AuditLogCreate
 
 
 class AuditLogService:
-
     def create(self, payload: AuditLogCreate | dict) -> dict:
         """Persist a single audit log entry and return it as a dict."""
         with get_session() as session:
@@ -36,13 +35,20 @@ class AuditLogService:
                 select(func.count()).select_from(stmt.subquery())
             ).scalar_one()
 
-            rows = session.execute(
-                stmt.order_by(AuditLog.timestamp.desc()).limit(limit).offset(offset)
-            ).scalars().all()
+            rows = (
+                session.execute(
+                    stmt.order_by(AuditLog.timestamp.desc()).limit(limit).offset(offset)
+                )
+                .scalars()
+                .all()
+            )
 
             return {
                 "total": total,
-                "items": [{k: v for k, v in r.__dict__.items() if not k.startswith("_")} for r in rows],
+                "items": [
+                    {k: v for k, v in r.__dict__.items() if not k.startswith("_")}
+                    for r in rows
+                ],
             }
 
     def get(self, log_id: int) -> Optional[dict]:

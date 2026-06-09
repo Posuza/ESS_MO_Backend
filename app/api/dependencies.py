@@ -1,241 +1,293 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import joinedload
-from typing import Optional, List, Tuple
+"""
+app.api.dependencies — decorator-based auth, role & permission guards.
+
+Usage
+-----
+from app.api.dependencies import active_employee_required
+
+@router.get("/employees")
+@active_employee_required
+async def list_employees(current_employee: Employee, db: Session = Depends(get_db)):
+    ...
+To add role / permission checks later (uncomment when ready):
+
+    @roles_required("admin")
+    @permissions_required("employees.create")
+"""
+
+from __future__ import annotations
+
+import inspect
 from functools import wraps
-from datetime import datetime
+from typing import List, Optional
 
-from app.core.orm import get_db
-# from app.models.user import user  # OLD - Not used with employee model
+from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
+
+from app.core.audit_logger import audit_logger, set_audit_context
+from app.core.db.session import get_db
+from app.core.registries import (
+    ACCESS_DENIED_PERMISSION,
+    ACCESS_DENIED_ROLE,
+    ACCOUNT_INACTIVE,
+    AUTH_ERROR_ACCOUNT_INACTIVE,
+    AUTH_ERROR_EMPLOYEE_NOT_FOUND,
+    AUTH_ERROR_FORBIDDEN,
+    EMPLOYEE_NOT_FOUND,
+)
+from app.core.security.request_actor import extract_actor_employee_code
+from app.models.employee_permissions import EmployeePermission
+from app.models.employees import Employee
+from app.models.roles import Role
 
 
+def _get_active_employee(db: Session, employee_code: str) -> Employee:
+    """Look up an employee by code and verify the account is active.
 
-# def _validate_token(token: HTTPAuthorizationCredentials, db: Session) -> Tuple[int, str]:
-#     """Validate token and return user_id and user_type"""
-#     payload = verify_token(token.credentials)
-#     if not payload:
-#         raise HTTPException(status_code=401, detail="Invalid token")
+    Returns the Employee ORM instance.
+    Raises HTTPException if not found or inactive.
+    """
+    employee = (
+        db.query(Employee).filter(Employee.employee_code == employee_code).first()
+    )
 
-#     token_obj = db.query(Token).filter(
-#         Token.token == token.credentials,
-#         Token.is_revoked == False
-#     ).first()
-    
-#     if not token_obj or token_obj.expires_at < datetime.utcnow():
-#         raise HTTPException(status_code=401, detail="Token expired or invalid")
-    
-#     user_id = payload.get("sub")
-#     user_type = payload.get("type", "customer")  # Default to customer if not specified
-#     if not user_id:
-#         raise HTTPException(status_code=401, detail="Invalid token payload")  
-#     # Convert to int since we're now using str(user.id) in JWT
-#     try:
-#         user_id = int(user_id)
-#     except (ValueError, TypeError):
-#         raise HTTPException(status_code=401, detail="Invalid user ID format")
-    
-#     # Optional: Verify that token_obj.type matches payload type
-#     if token_obj.type != user_type:
-#         raise HTTPException(status_code=401, detail="Token type mismatch")
-    
-#     return user_id, user_type
-
-def _get_active_user(db: Session, user_id: int, user_type: str) -> Tuple[Customer, str]:
-    """Internal function to get active user and user type"""
-    try:
-        # Determine which model to query based on user_type
-        #     from app.models.user import users  # OLD - Not used with employee model
-            user = db.query(Administrator).filter(Administrator.id == user_id).first()
-        else:
-            user = db.query(Customer).filter(Customer.id == user_id).first()
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account is inactive. Please contact support.",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
-        return user, user_type
-    except HTTPException:
-        raise
-    except Exception as e:
+    if not employee:
+        audit_logger.log(
+            action=EMPLOYEE_NOT_FOUND,
+        )
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication failed: {str(e)}",
-            headers={"WWW-Authenticate": "Bearer"}
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=AUTH_ERROR_EMPLOYEE_NOT_FOUND,
         )
 
-# def _check_permissions(db: Session, user_id: int, permissions: List[str]) -> bool:
-#     """Check if the user has the required permissions"""
-#     try:
-#         from app.models.user.administrator import Administrator
-#         from app.models.user.administrator_permissionMap import AdministratorPermissionMap
-#         admin = db.query(Administrator).options(
-#             joinedload(Administrator.permissions).joinedload(AdministratorPermissionMap.permission)
-#         ).filter(Administrator.id == user_id).first()
-#         if not admin:
-#             return False
-#         # Access permission names through the AdministratorPermissionMap
-#         admin_perm_names = [p.permission.name for p in admin.permissions]
-#         return all(perm in admin_perm_names for perm in permissions)
-#     except Exception:
-#         return False
+    if not employee.is_active:
+        audit_logger.log(
+            action=ACCOUNT_INACTIVE,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=AUTH_ERROR_ACCOUNT_INACTIVE,
+        )
 
-# # ==================== DECORATORS ====================
+    return employee
 
-# def token_required(func):
-#     @wraps(func)
-#     async def wrapper(*args, **kwargs):
-#         token = None
-#         db = None
-#         for key, value in kwargs.items():
-#             if isinstance(value, HTTPAuthorizationCredentials):
-#                 token = value
-#             elif isinstance(value, Session):
-#                 db = value
-        
-#         if not token or not db:
-#             raise HTTPException(
-#                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#                 detail="Missing required dependencies (token or db)"
-#             )
-        
-#         user_id, user_type = _validate_token(token, db)
-#         current_user, user_type = _get_active_user(db, user_id, user_type)
-#         kwargs['user_id'] = user_id
-#         kwargs['user_type'] = user_type
-#         return await func(*args, **kwargs)
-#     return wrapper
 
-def active_user_required(func):
+def _check_permissions(db: Session, employee_code: str, permissions: List[str]) -> bool:
+    """Check if an employee has ALL the given permissions.
+
+    Reads from the ``employee_permissions`` table (active rows only).
+    """
+    try:
+        rows = (
+            db.query(EmployeePermission.permissions_name)
+            .filter(
+                EmployeePermission.employee_code == employee_code,
+                EmployeePermission.is_active.is_(True),
+            )
+            .all()
+        )
+        employee_perms = {row[0] for row in rows}
+        return all(p in employee_perms for p in permissions)
+    except Exception:
+        return False
+
+
+def _get_employee_role(db: Session, employee_code: str) -> Optional[str]:
+    """Return the role name for an employee, or None."""
+    employee = (
+        db.query(Employee).filter(Employee.employee_code == employee_code).first()
+    )
+    if not employee:
+        return None
+    role = db.query(Role).filter(Role.role_id == employee.role_id).first()
+    return role.role_name if role else None
+
+
+def active_employee_required(func):
+    """Decorator — extract employee identity from request headers and
+    inject the full ``Employee`` ORM object as ``current_employee``.
+    Usage
+    -----
+    @router.get("/me")
+    @active_employee_required
+    async def me(current_employee: Employee = None, db: Session = Depends(get_db)):
+        return current_employee
+    """
+
+    # Build a new signature that hides ``current_employee`` from FastAPI
+    original_sig = inspect.signature(func)
+    new_params = [
+        p for name, p in original_sig.parameters.items() if name != "current_employee"
+    ]
+    new_sig = original_sig.replace(parameters=new_params)
+
     @wraps(func)
     async def wrapper(*args, **kwargs):
         db = None
-        for key, value in kwargs.items():
-            if isinstance(value, HTTPAuthorizationCredentials):
-                token = value
-            elif isinstance(value, Session):
-                db = value
+        request = None
 
-        current_user, user_type = _get_active_user(db, user_id, user_type)
-        kwargs['current_user'] = current_user
-        kwargs['user_type'] = user_type
-        
+        for value in kwargs.values():
+            if isinstance(value, Session):
+                db = value
+            elif isinstance(value, Request):
+                request = value
+
+        # Also check positional args for request object
+        for arg in args:
+            if isinstance(arg, Request):
+                request = arg
+
+        if not db or not request:
+            raise HTTPException(
+                status_code=500,
+                detail="Missing required dependencies (db session or request object)",
+            )
+
+        # Extract employee code from headers
+        employee_code = extract_actor_employee_code(request)
+
+        # Load full employee object
+        current_employee = _get_active_employee(db, employee_code)
+
+        # Set audit context with real user info (overrides middleware default)
+        employee_name = (
+            f"{current_employee.first_name} {current_employee.last_name}".strip()
+            or current_employee.email
+            or employee_code
+        )
+        set_audit_context(
+            request=request,
+            user_name=employee_name,
+            employee_code=employee_code,
+        )
+
+        kwargs["current_employee"] = current_employee
+
         return await func(*args, **kwargs)
-    
+
+    wrapper.__signature__ = new_sig
     return wrapper
 
-# def roles_required(*allowed_roles):
-#     """Decorator to require specific roles - provides current_user and user_type"""
-#     def decorator(func):
-#         @wraps(func)
-#         async def wrapper(*args, **kwargs):
-#             token = None
-#             db = None
-#             for key, value in kwargs.items():
-#                 if isinstance(value, HTTPAuthorizationCredentials):
-#                     token = value
-#                 elif isinstance(value, Session):
-#                     db = value
-            
-#             if not token or not db:
-#                 raise HTTPException(
-#                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#                     detail="Missing required dependencies (token or db)"
-#                 )
-            
-#             user_id, user_type = _validate_token(token, db)
-#             current_user, user_type = _get_active_user(db, user_id, user_type)
-            
-#             # Normalize allowed_roles: support @roles_required(["a","b"]) or @roles_required("a","b")
-#             roles = allowed_roles
-#             if len(roles) == 1 and isinstance(roles[0], (list, tuple, set)):
-#                 roles = tuple(roles[0])
-#             # Ensure all items are strings
-#             roles = tuple(str(r) for r in roles)
-            
-#             if current_user.role not in roles:
-#                 raise HTTPException(
-#                     status_code=status.HTTP_403_FORBIDDEN,
-#                     detail=f"Access denied. Required roles: {', '.join(roles)}. Your role: {current_user.role}"
-#                 )
-            
-#             kwargs['current_user'] = current_user
-#             kwargs['user_type'] = user_type
-#             return await func(*args, **kwargs)
-        
-#         return wrapper
-#     return decorator
 
-# def roles_and_permissions_required(*allowed_roles, permissions: Optional[List[str]] = None):
-#     """Decorator to require specific roles and optionally permissions - provides current_user and user_type"""
-#     def decorator(func):
-#         @wraps(func)
-#         async def wrapper(*args, **kwargs):
-#             token = None
-#             db = None
-#             for key, value in kwargs.items():
-#                 if isinstance(value, HTTPAuthorizationCredentials):
-#                     token = value
-#                 elif isinstance(value, Session):
-#                     db = value
-            
-#             if not token or not db:
-#                 raise HTTPException(
-#                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#                     detail="Missing required dependencies (token or db)"
-#                 )
-            
-#             user_id, user_type = _validate_token(token, db)
-#             current_user, user_type = _get_active_user(db, user_id, user_type)
-            
-#             # Normalize allowed_roles: support @roles_and_permissions_required(["a","b"], permissions=...)
-#             roles = allowed_roles
-#             if len(roles) == 1 and isinstance(roles[0], (list, tuple, set)):
-#                 roles = tuple(roles[0])
-#             roles = tuple(str(r) for r in roles)
-            
-#             # Check role
-#             if current_user.role not in roles:
-#                 raise HTTPException(
-#                     status_code=status.HTTP_403_FORBIDDEN,
-#                     detail=f"Access denied. Required roles: {', '.join(roles)}. Your role: {current_user.role}"
-#                 )
-            
-#             # Normalize permissions: accept a single string or a list/tuple
-#             perms = permissions
-#             if isinstance(perms, str):
-#                 perms = [perms]
-#             if isinstance(perms, (list, tuple, set)):
-#                 perms = [str(p) for p in perms]
-            
-#             # Check permissions if specified
-#             if perms:
-#                 if not _check_permissions(db, user_id, perms):
-#                     raise HTTPException(
-#                         status_code=status.HTTP_403_FORBIDDEN,
-#                         detail=f"Access denied. Required permissions: {', '.join(perms)}"
-#                     )
-            
-#             kwargs['current_user'] = current_user
-#             kwargs['user_type'] = user_type
-#             return await func(*args, **kwargs)
-        
-#         return wrapper
-#     return decorator
+# ═══════════════════════════════════════════════════════════════════════
+# Role-required decorator  (READY TO USE)
+# ═══════════════════════════════════════════════════════════════════════
 
-# Export decorators
+
+def roles_required(*allowed_roles):
+    """Decorator factory — require the employee to have one of the given roles.
+
+    Accepts roles as individual strings OR as a single list/tuple.
+
+    Must be used **below** ``@active_employee_required`` so that
+    ``current_employee`` is already injected.
+
+    Usage
+    -----
+    @roles_required("admin")                 # single
+    @roles_required("admin", "super_admin")  # multiple args
+    @roles_required(["admin", "super_admin"]) # array
+    """
+
+    # Normalize: support both @roles_required("a", "b") and @roles_required(["a", "b"])
+    if len(allowed_roles) == 1 and isinstance(allowed_roles[0], (list, tuple, set)):
+        allowed_roles = tuple(allowed_roles[0])
+
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            db = None
+            current_employee = kwargs.get("current_employee")
+
+            for value in kwargs.values():
+                if isinstance(value, Session):
+                    db = value
+
+            if not current_employee or not db:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Missing current_employee or db session",
+                )
+
+            role_name = _get_employee_role(db, current_employee.employee_code)
+            if not role_name or role_name not in allowed_roles:
+                audit_logger.log(
+                    action=ACCESS_DENIED_ROLE,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=AUTH_ERROR_FORBIDDEN,
+                )
+
+            return await func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Permissions-required decorator  (READY TO USE)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class permissions_required:
+    """Decorator class — require the employee to have ALL listed permissions.
+    Must be used **below** ``@active_employee_required``.
+    Usage
+    -----
+    @permissions_required("reports.read")                  # single
+    @permissions_required("reports.read", "reports.write") # multiple args
+    @permissions_required(["reports.read", "reports.write"]) # array
+    """
+
+    def __init__(self, *required_permissions):
+        # Normalize: support both @permissions_required("a", "b") and @permissions_required(["a", "b"])
+        if len(required_permissions) == 1 and isinstance(
+            required_permissions[0], (list, tuple, set)
+        ):
+            required_permissions = tuple(required_permissions[0])
+        self.required_permissions = required_permissions
+
+    def __call__(self, func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            db = None
+            current_employee = kwargs.get("current_employee")
+
+            for value in kwargs.values():
+                if isinstance(value, Session):
+                    db = value
+
+            if not current_employee or not db:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Missing current_employee or db session",
+                )
+
+            if not _check_permissions(
+                db, current_employee.employee_code, self.required_permissions
+            ):
+                audit_logger.log(
+                    action=ACCESS_DENIED_PERMISSION,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=AUTH_ERROR_FORBIDDEN,
+                )
+
+            return await func(*args, **kwargs)
+
+        return wrapper
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Public exports
+# ═══════════════════════════════════════════════════════════════════════
+
 __all__ = [
-    # "token_required", 
-    # "roles_required", 
-    # "roles_and_permissions_required",
-    "active_user_required",
-
+    "active_employee_required",
+    "roles_required",
+    "permissions_required",
+    # "token_required",           # Activate with JWT
 ]

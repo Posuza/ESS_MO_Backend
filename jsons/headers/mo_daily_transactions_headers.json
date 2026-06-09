@@ -1,0 +1,212 @@
+[
+    {
+        "column_name": "mo_daily_transaction_id",
+        "data_type": "INTEGER",
+        "is_primary_key": true,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "department_id",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "leave_sick_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "leave_business_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "leave_other_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "absent_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "shift_18_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "shift_24_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "shift_36_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "rule_sleep_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "rule_use_phone_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "rule_no_card_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "warning",
+        "data_type": "TEXT",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    },
+    {
+        "column_name": "wear_hat_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "wear_shirt_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "wear_pant_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "wear_shoe_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "other_job",
+        "data_type": "TEXT",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    },
+    {
+        "column_name": "other_job_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "other_training",
+        "data_type": "TEXT",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    },
+    {
+        "column_name": "other_training_count",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'0'"
+    },
+    {
+        "column_name": "other_extral",
+        "data_type": "TEXT",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    },
+    {
+        "column_name": "approved_by",
+        "data_type": "VARCHAR(6)",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    },
+    {
+        "column_name": "approved_at",
+        "data_type": "DATETIME",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    },
+    {
+        "column_name": "approved_status",
+        "data_type": "ENUM",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'PENDING'"
+    },
+    {
+        "column_name": "approved_remark",
+        "data_type": "TEXT",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    },
+    {
+        "column_name": "created_at",
+        "data_type": "DATETIME",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "CURRENT_TIMESTAMP"
+    },
+    {
+        "column_name": "updated_at",
+        "data_type": "DATETIME",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+    },
+    {
+        "column_name": "created_by",
+        "data_type": "VARCHAR(6)",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "updated_by",
+        "data_type": "VARCHAR(6)",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    }
+]

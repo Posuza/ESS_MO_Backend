@@ -1,210 +1,463 @@
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
-from fastapi import HTTPException
-from sqlalchemy import func, select, update
+from fastapi import HTTPException, status
+from sqlalchemy import delete, func, select
+from sqlalchemy.orm import Session
 
-from app.core.orm import get_session
 from app.models.employees import Employee
+from app.models.mo_daily_transaction_detail_1 import MoDailyTransactionDetail1
+from app.models.mo_daily_transaction_detail_2 import MoDailyTransactionDetail2
+from app.models.mo_daily_transactions import ApprovedStatusEnum, MoDailyTransaction
 from app.models.positions import Position
-from app.models.mo_daily_transactions import MoDailyTransaction, ApprovedStatusEnum
 from app.schemas.mo_daily_transactions import (
     MoDailyTransactionCreate,
+    MoDailyTransactionResponse,
     MoDailyTransactionUpdate,
+    SectorReportProject,
 )
+
+# ─── Field mappings ──────────────────────────────────────────────────────────
+# Detail 1 fields: (key_in_detail1, field_name_in_flat_payload)
+DETAIL_1_FIELDS = [
+    ("1.1", "dept_guard_post_count"),
+    ("1.2", "dept_current_personnel_count"),
+    ("1.3", "dept_missing_regular_count"),
+    ("1.4", "dept_missing_personnel_count"),
+    ("1.5", "dept_supplement_count"),
+    ("1.6", "dept_recruitment_count"),
+    ("1.7", "dept_reserve_units_count"),
+    ("1.8", "dept_reserve_personnel_count"),
+    ("2.1", "leave_personal_count"),
+    ("2.2", "leave_sick_count"),
+    ("2.3", "leave_absent_count"),
+    ("2.4", "leave_deserted_count"),
+    ("2.5", "leave_resigned_count"),
+    ("2.6", "leave_terminated_count"),
+    ("3.1", "shift_18_count"),
+    ("3.2", "shift_24_count"),
+    ("3.3", "shift_36_count"),
+    ("4.1", "training_shift_change_count"),
+    ("4.2", "training_planned_count"),
+    ("4.3", "training_duty_control_count"),
+]
+DETAIL_1_BY_KEY = dict(DETAIL_1_FIELDS)
+DETAIL_1_BY_NAME = {name: key for key, name in DETAIL_1_FIELDS}
+
+# Legacy field aliases: (standardized_name, legacy_name)
+LEGACY_ALIASES = {
+    "leave_personal_count": "leave_business_count",
+    "leave_absent_count": "absent_count",
+    "discipline_phone_count": "rule_use_phone_count",
+    "discipline_belt_count": "rule_sleep_count",
+    "discipline_badge_count": "rule_no_card_count",
+}
 
 
 class MoDailyTransactionService:
+    """Service layer for MO Daily Transaction operations.
+
+    All public methods follow the same pattern:
+      - ``db`` is injected by the caller (FastAPI ``Depends(get_db)``)
+      - ``actor_employee`` is resolved by the ``@active_employee_required`` decorator
+    """
+
+    # ─── Helpers ──────────────────────────────────────────────────────────────
+
     @staticmethod
-    def _row_to_dict(row: MoDailyTransaction) -> dict:
-        data = dict(row.__dict__)
-        data.pop("_sa_instance_state", None)
-        return data
+    def _as_int(value, default: int = 0) -> int:
+        if value is None or value == "":
+            return default
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
-    def _resolve_actor(self, actor_employee_code: str) -> dict:
-        with get_session() as session:
-            employee = session.execute(
-                select(Employee).where(Employee.employee_code == actor_employee_code)
-            ).scalars().first()
-            if not employee:
-                raise HTTPException(status_code=401, detail="Actor employee not found")
-            if not employee.is_active:
-                raise HTTPException(status_code=403, detail="Inactive employee cannot perform this action")
+    @staticmethod
+    def _is_admin(actor: Employee, db: Session) -> bool:
+        """Check if the actor has an admin-level role or position."""
+        if actor.role_id in {1, 9, 99}:
+            return True
+        position = (
+            db.execute(
+                select(Position.position_name).where(
+                    Position.position_id == actor.position_id
+                )
+            )
+            .scalars()
+            .first()
+        )
+        return position is not None and "admin" in position.strip().lower()
 
-            position_name = session.execute(
-                select(Position.position_name).where(Position.position_id == employee.position_id)
-            ).scalars().first()
+    @staticmethod
+    def _enforce_same_department(
+        actor: Employee, department_id: Optional[int], db: Session
+    ) -> None:
+        if MoDailyTransactionService._is_admin(actor, db):
+            return
+        if department_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Department is required",
+            )
+        if actor.department_id != department_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only access reports in your own department",
+            )
 
-        return {
-            "employee_code": employee.employee_code,
-            "role_id": employee.role_id,
-            "department_id": employee.department_id,
-            "position_name": (position_name or "").strip().lower(),
+    @staticmethod
+    def _normalize_flat(data: dict) -> dict:
+        """Resolve legacy field aliases into standardized names."""
+        n = dict(data)
+        for standard, legacy in LEGACY_ALIASES.items():
+            if legacy in n and standard not in n:
+                n[standard] = n[legacy]
+        return n
+
+    @staticmethod
+    def _build_response(txn: MoDailyTransaction, db: Session) -> dict:
+        """Build a flat response dict from a transaction + its detail rows."""
+        data = {
+            "id": txn.mo_daily_transaction_id,
+            "mo_daily_transaction_id": txn.mo_daily_transaction_id,
+            "department_id": txn.department_id,
+            "sub_location": txn.sub_location,
+            "report_date": txn.created_at.date().isoformat()
+            if txn.created_at
+            else None,
+            "status": txn.approved_status.value if txn.approved_status else None,
+            "approved_status": txn.approved_status.value
+            if txn.approved_status
+            else None,
+            "approved_by": txn.approved_by,
+            "approved_at": txn.approved_at,
+            "approved_remark": txn.approved_remark,
+            "created_by": txn.created_by,
+            "created_at": txn.created_at,
+            "updated_at": txn.updated_at,
+            "updated_by": txn.updated_by,
         }
 
-    def _is_manager_or_admin(self, actor: dict) -> bool:
-        role_id = actor["role_id"]
-        position_name = actor["position_name"]
-        if role_id in {1, 2, 9, 99}:
-            return True
-        return ("manager" in position_name) or ("admin" in position_name)
+        # Default all detail1 count fields to 0
+        for _, name in DETAIL_1_FIELDS:
+            data[name] = 0
 
-    def _is_admin(self, actor: dict) -> bool:
-        role_id = actor["role_id"]
-        position_name = actor["position_name"]
-        return (role_id in {1, 9, 99}) or ("admin" in position_name)
+        # Load detail1 rows
+        detail1_rows = (
+            db.execute(
+                select(MoDailyTransactionDetail1).where(
+                    MoDailyTransactionDetail1.mo_daily_transaction_id
+                    == txn.mo_daily_transaction_id
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for row in detail1_rows:
+            field_name = DETAIL_1_BY_KEY.get(row.field_key)
+            if field_name:
+                data[field_name] = MoDailyTransactionService._as_int(row.field_value)
 
-    def _enforce_same_department(self, actor: dict, target_department_id: Optional[int]) -> None:
-        if self._is_admin(actor):
-            return
-        if target_department_id is None:
-            raise HTTPException(status_code=403, detail="Department is required for access control")
-        if actor["department_id"] != target_department_id:
-            raise HTTPException(status_code=403, detail="You can only access reports in your own department")
+        # Populate legacy aliases from standardized values
+        for standard, legacy in LEGACY_ALIASES.items():
+            data[legacy] = data.get(standard, 0)
 
+        # Load detail2 → projects
+        detail2_rows = (
+            db.execute(
+                select(MoDailyTransactionDetail2)
+                .where(
+                    MoDailyTransactionDetail2.mo_daily_transaction_id
+                    == txn.mo_daily_transaction_id
+                )
+                .order_by(MoDailyTransactionDetail2.created_at)
+            )
+            .scalars()
+            .all()
+        )
+
+        projects = []
+        for row in detail2_rows:
+            projects.append(
+                {
+                    "key": row.key,
+                    "label": row.label,
+                    "detail": row.detail or "",
+                    "status": row.status or "normal",
+                    "note": row.note or "",
+                }
+            )
+        data["projects"] = projects
+
+        return data
+
+    @staticmethod
+    def _replace_detail1(db: Session, txn_id: int, payload: dict) -> None:
+        db.execute(
+            delete(MoDailyTransactionDetail1).where(
+                MoDailyTransactionDetail1.mo_daily_transaction_id == txn_id
+            )
+        )
+        rows = []
+        for sort_order, (field_key, field_name) in enumerate(DETAIL_1_FIELDS, start=1):
+            rows.append(
+                MoDailyTransactionDetail1(
+                    mo_daily_transaction_id=txn_id,
+                    field_key=field_key,
+                    field_value=str(
+                        MoDailyTransactionService._as_int(payload.get(field_name))
+                    ),
+                    sort_order=sort_order,
+                )
+            )
+        db.add_all(rows)
+
+    @staticmethod
+    def _replace_detail2(db: Session, txn_id: int, payload: dict) -> None:
+        db.execute(
+            delete(MoDailyTransactionDetail2).where(
+                MoDailyTransactionDetail2.mo_daily_transaction_id == txn_id
+            )
+        )
+        rows = []
+        sort_order = 1
+
+        # Projects/meetings
+        for project_data in payload.get("projects") or []:
+            if hasattr(project_data, "model_dump"):
+                project_data = project_data.model_dump()
+            elif not isinstance(project_data, dict):
+                project_data = dict(project_data)
+            rows.append(
+                MoDailyTransactionDetail2(
+                    mo_daily_transaction_id=txn_id,
+                    key=str(project_data.get("key", f"6.{sort_order}")),
+                    label=project_data.get("label", ""),
+                    detail=project_data.get("detail", ""),
+                    status=project_data.get("status", "normal"),
+                    note=project_data.get("note", ""),
+                )
+            )
+            sort_order += 1
+
+        db.add_all(rows)
+
+    # ─── Public Methods ───────────────────────────────────────────────────────
+
+    @staticmethod
     def list_reports(
-        self,
-        actor_employee_code: str,
+        db: Session,
+        actor_employee: Employee,
         department_id: Optional[int] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         status: Optional[ApprovedStatusEnum] = None,
         created_by: Optional[str] = None,
-        min_absent: Optional[int] = None,
-        max_absent: Optional[int] = None
     ) -> List[dict]:
-        actor = self._resolve_actor(actor_employee_code)
-        if not self._is_admin(actor):
-            if department_id is not None and department_id != actor["department_id"]:
-                raise HTTPException(status_code=403, detail="You can only list reports in your own department")
-            department_id = actor["department_id"]
+        if not MoDailyTransactionService._is_admin(actor_employee, db):
+            if (
+                department_id is not None
+                and department_id != actor_employee.department_id
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only list reports in your own department",
+                )
+            department_id = actor_employee.department_id
 
-        with get_session() as session:
-            stmt = select(MoDailyTransaction)
-            
-            if department_id is not None:
-                stmt = stmt.where(MoDailyTransaction.department_id == department_id)
-            if start_date:
-                stmt = stmt.where(MoDailyTransaction.created_at >= start_date)
-            if end_date:
-                if end_date.hour == 0 and end_date.minute == 0 and end_date.second == 0:
-                    end_date = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
-                stmt = stmt.where(MoDailyTransaction.created_at <= end_date)
-            if status:
-                stmt = stmt.where(MoDailyTransaction.approved_status == status)
-            if created_by:
-                stmt = stmt.where(MoDailyTransaction.created_by == created_by)
-            if min_absent is not None:
-                stmt = stmt.where(MoDailyTransaction.absent_count >= min_absent)
-            if max_absent is not None:
-                stmt = stmt.where(MoDailyTransaction.absent_count <= max_absent)
+        stmt = select(MoDailyTransaction)
+        if department_id is not None:
+            stmt = stmt.where(MoDailyTransaction.department_id == department_id)
+        if start_date:
+            stmt = stmt.where(MoDailyTransaction.created_at >= start_date)
+        if end_date:
+            if end_date.hour == 0 and end_date.minute == 0 and end_date.second == 0:
+                end_date = end_date.replace(
+                    hour=23, minute=59, second=59, microsecond=999999
+                )
+            stmt = stmt.where(MoDailyTransaction.created_at <= end_date)
+        if status:
+            stmt = stmt.where(MoDailyTransaction.approved_status == status)
+        if created_by:
+            stmt = stmt.where(MoDailyTransaction.created_by == created_by)
+        stmt = stmt.order_by(MoDailyTransaction.created_at.desc())
 
-            stmt = stmt.order_by(MoDailyTransaction.created_at.desc())
-            rows = session.execute(stmt).scalars().all()
-            
-            print(f"--- list_reports: department={department_id}, start={start_date}, end={end_date} ---")
-            print(f"Found {len(rows)} records.")
-            return [self._row_to_dict(row) for row in rows]
+        rows = db.execute(stmt).scalars().all()
+        return [MoDailyTransactionService._build_response(r, db) for r in rows]
 
-    def create_report(self, payload: MoDailyTransactionCreate, actor_employee_code: str) -> dict:
-        p = payload.model_dump()
-        actor = self._resolve_actor(actor_employee_code)
-        self._enforce_same_department(actor, p["department_id"])
+    @staticmethod
+    def create_report(
+        db: Session,
+        payload: MoDailyTransactionCreate,
+        actor_employee: Employee,
+    ) -> dict:
+        data = MoDailyTransactionService._normalize_flat(payload.model_dump())
+        MoDailyTransactionService._enforce_same_department(
+            actor_employee, data["department_id"], db
+        )
 
-        with get_session() as session:
-            report = MoDailyTransaction(
-                department_id=p["department_id"],
-                leave_sick_count=p["leave_sick_count"],
-                leave_business_count=p["leave_business_count"],
-                leave_other_count=p["leave_other_count"],
-                absent_count=p["absent_count"],
-                shift_18_count=p["shift_18_count"],
-                shift_24_count=p["shift_24_count"],
-                shift_36_count=p["shift_36_count"],
-                rule_sleep_count=p["rule_sleep_count"],
-                rule_use_phone_count=p["rule_use_phone_count"],
-                rule_no_card_count=p["rule_no_card_count"],
-                warning=p.get("warning"),
-                wear_hat_count=p["wear_hat_count"],
-                wear_shirt_count=p["wear_shirt_count"],
-                wear_pant_count=p["wear_pant_count"],
-                wear_shoe_count=p["wear_shoe_count"],
-                other_job=p.get("other_job"),
-                other_job_count=p["other_job_count"],
-                other_training=p.get("other_training"),
-                other_training_count=p["other_training_count"],
-                other_extral=p.get("other_extral"),
-                approved_by=None,
-                approved_status=ApprovedStatusEnum.PENDING,
-                approved_remark=None,
-                created_by=p["created_by"],
-                created_at=p.get("created_at") or func.now(),
-                updated_by=None,
-                updated_at=None,
+        if data.get("approved_status") in {
+            ApprovedStatusEnum.APPROVED.value,
+            ApprovedStatusEnum.REJECT.value,
+        }:
+            data["approved_by"] = (
+                data.get("approved_by") or actor_employee.employee_code
             )
-            session.add(report)
-            session.commit()
-            session.refresh(report)
-            ret_data = self._row_to_dict(report)
-            print(f"--- create_report: created ID {report.mo_daily_transaction_id} for department {report.department_id} ---")
-            return ret_data
+            data["approved_at"] = data.get("approved_at") or func.now()
 
-    def get_report(self, mo_daily_transaction_id: int) -> dict:
-        with get_session() as session:
-            row = session.execute(
-                select(MoDailyTransaction).where(MoDailyTransaction.mo_daily_transaction_id == mo_daily_transaction_id)
-            ).scalars().first()
-        if not row:
-            raise HTTPException(status_code=404, detail="Daily transaction report not found")
-        return self._row_to_dict(row)
+        txn = MoDailyTransaction(
+            department_id=data["department_id"],
+            sub_location=data.get("sub_location"),
+            approved_by=data.get("approved_by"),
+            approved_status=data.get("approved_status") or ApprovedStatusEnum.PENDING,
+            approved_at=data.get("approved_at"),
+            approved_remark=data.get("approved_remark"),
+            created_by=data.get("created_by") or actor_employee.employee_code,
+        )
+        db.add(txn)
+        db.commit()
+        db.refresh(txn)
 
-    def get_report_for_actor(self, mo_daily_transaction_id: int, actor_employee_code: str) -> dict:
-        actor = self._resolve_actor(actor_employee_code)
-        row = self.get_report(mo_daily_transaction_id)
-        row_dept_id = row.get("department_id")
-        self._enforce_same_department(actor, row_dept_id)
-        return row
+        MoDailyTransactionService._replace_detail1(
+            db, txn.mo_daily_transaction_id, data
+        )
+        MoDailyTransactionService._replace_detail2(
+            db, txn.mo_daily_transaction_id, data
+        )
+        db.commit()
 
-    def update_report(self, mo_daily_transaction_id: int, payload: MoDailyTransactionUpdate, actor_employee_code: str) -> dict:
-        actor = self._resolve_actor(actor_employee_code)
-        with get_session() as session:
-            existing = session.execute(select(MoDailyTransaction).where(MoDailyTransaction.mo_daily_transaction_id == mo_daily_transaction_id)).scalars().first()
-            if not existing:
-                raise HTTPException(status_code=404, detail="Daily transaction report not found")
-            self._enforce_same_department(actor, existing.department_id)
+        return MoDailyTransactionService._build_response(txn, db)
 
-        updates = payload.model_dump(exclude_unset=True)
-        if not updates:
-            raise HTTPException(status_code=400, detail="No fields to update")
+    @staticmethod
+    def get_report(
+        db: Session,
+        mo_daily_transaction_id: int,
+        actor_employee: Employee,
+    ) -> dict:
+        txn = (
+            db.execute(
+                select(MoDailyTransaction).where(
+                    MoDailyTransaction.mo_daily_transaction_id
+                    == mo_daily_transaction_id
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not txn:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
+            )
+        MoDailyTransactionService._enforce_same_department(
+            actor_employee, txn.department_id, db
+        )
+        return MoDailyTransactionService._build_response(txn, db)
 
-        updates["updated_at"] = func.now()
-        updates["updated_by"] = actor["employee_code"]
+    @staticmethod
+    def update_report(
+        db: Session,
+        mo_daily_transaction_id: int,
+        payload: MoDailyTransactionUpdate,
+        actor_employee: Employee,
+    ) -> dict:
+        data = MoDailyTransactionService._normalize_flat(
+            payload.model_dump(exclude_unset=True)
+        )
 
-        if "approved_status" in updates:
-            approved_status = updates["approved_status"]
-            if approved_status in {ApprovedStatusEnum.APPROVED, ApprovedStatusEnum.REJECT}:
-                if "approved_by" not in updates:
-                    updates["approved_by"] = actor["employee_code"]
-                updates["approved_at"] = func.now()
+        txn = (
+            db.execute(
+                select(MoDailyTransaction).where(
+                    MoDailyTransaction.mo_daily_transaction_id
+                    == mo_daily_transaction_id
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not txn:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
+            )
+        MoDailyTransactionService._enforce_same_department(
+            actor_employee, txn.department_id, db
+        )
 
-        with get_session() as session:
-            session.execute(update(MoDailyTransaction).where(MoDailyTransaction.mo_daily_transaction_id == mo_daily_transaction_id).values(**updates))
-            session.commit()
+        # Update main transaction fields
+        for field in ("sub_location", "approved_by", "approved_remark"):
+            if field in data:
+                setattr(txn, field, data[field])
+        if "approved_status" in data:
+            txn.approved_status = data["approved_status"]
+        if data.get("approved_status") in {
+            ApprovedStatusEnum.APPROVED.value,
+            ApprovedStatusEnum.REJECT.value,
+        }:
+            if not txn.approved_by:
+                txn.approved_by = actor_employee.employee_code
+            if not txn.approved_at:
+                txn.approved_at = func.now()
+        txn.updated_by = actor_employee.employee_code
+        txn.updated_at = func.now()
 
-        return self.get_report_for_actor(mo_daily_transaction_id, actor_employee_code=actor_employee_code)
+        db.commit()
 
-    def delete_report(self, mo_daily_transaction_id: int, actor_employee_code: str) -> dict:
-        actor = self._resolve_actor(actor_employee_code)
-        with get_session() as session:
-            report = session.execute(
-                select(MoDailyTransaction).where(MoDailyTransaction.mo_daily_transaction_id == mo_daily_transaction_id)
-            ).scalars().first()
-            
-            if not report:
-                raise HTTPException(status_code=404, detail="Daily transaction report not found")
-            self._enforce_same_department(actor, report.department_id)
-                
-            session.delete(report)
-            session.commit()
-            
-        return {"detail": "Daily transaction report deleted successfully"}
+        # Replace detail rows (only if any detail1 fields are in payload)
+        has_detail_fields = any(name in data for _, name in DETAIL_1_FIELDS)
+        if has_detail_fields:
+            MoDailyTransactionService._replace_detail1(
+                db, txn.mo_daily_transaction_id, data
+            )
+
+        if "projects" in data:
+            MoDailyTransactionService._replace_detail2(
+                db, txn.mo_daily_transaction_id, data
+            )
+
+        db.commit()
+        db.refresh(txn)
+
+        return MoDailyTransactionService._build_response(txn, db)
+
+    @staticmethod
+    def delete_report(
+        db: Session,
+        mo_daily_transaction_id: int,
+        actor_employee: Employee,
+    ) -> dict:
+        txn = (
+            db.execute(
+                select(MoDailyTransaction).where(
+                    MoDailyTransaction.mo_daily_transaction_id
+                    == mo_daily_transaction_id
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not txn:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
+            )
+        MoDailyTransactionService._enforce_same_department(
+            actor_employee, txn.department_id, db
+        )
+
+        # CASCADE should handle details, but be explicit
+        db.execute(
+            delete(MoDailyTransactionDetail1).where(
+                MoDailyTransactionDetail1.mo_daily_transaction_id
+                == mo_daily_transaction_id
+            )
+        )
+        db.execute(
+            delete(MoDailyTransactionDetail2).where(
+                MoDailyTransactionDetail2.mo_daily_transaction_id
+                == mo_daily_transaction_id
+            )
+        )
+        db.delete(txn)
+        db.commit()
+        return {"message": "Report deleted successfully"}

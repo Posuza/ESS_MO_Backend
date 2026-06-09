@@ -1,0 +1,58 @@
+[
+    {
+        "column_name": "sub_district_id",
+        "data_type": "INTEGER",
+        "is_primary_key": true,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "sub_district_name",
+        "data_type": "VARCHAR(225) COLLATE \"utf8mb4_unicode_ci\"",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "province_id",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "district_id",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "created_at",
+        "data_type": "DATETIME",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "CURRENT_TIMESTAMP(6)"
+    },
+    {
+        "column_name": "updated_at",
+        "data_type": "DATETIME",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"
+    },
+    {
+        "column_name": "created_by",
+        "data_type": "VARCHAR(6) COLLATE \"utf8mb4_unicode_ci\"",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "'SYSTEM'"
+    },
+    {
+        "column_name": "updated_by",
+        "data_type": "VARCHAR(6) COLLATE \"utf8mb4_unicode_ci\"",
+        "is_primary_key": false,
+        "is_nullable": true,
+        "default_value": null
+    }
+]

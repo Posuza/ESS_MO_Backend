@@ -1,20 +1,64 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api.endpoints import mo_daily_transactions
-from app.api.endpoints.auth import auth, forgot_password
+from app.api.endpoints import api_router
+from app.core.audit_logger import clear_audit_context, set_audit_context
 from app.core.config import settings
-from app.core.database import init_db
-from app.core.db_error_handler import DatabaseErrorMiddleware
+from app.core.db.db_error_handler import DatabaseErrorMiddleware
+from app.core.db.engine import Base, engine
+
+_logger = logging.getLogger(__name__)
+
+from app.models import (  # noqa: F401
+    addresses,
+    audit_logs,
+    departments,
+    districts,
+    divisions,
+    employee_permissions,
+    employees,
+    fields,
+    mo_daily_transaction_detail_1,
+    mo_daily_transaction_detail_2,
+    mo_daily_transactions,
+    name_prefixs,
+    position_change_logs,
+    positions,
+    postal_codes,
+    provinces,
+    roles,
+    route_change_logs,
+    routes,
+    shifts,
+    sub_districts,
+)
+
+
+class AuditContextMiddleware(BaseHTTPMiddleware):
+    """Inject audit context so audit.action() works without repeating params."""
+
+    async def dispatch(self, request: Request, call_next):
+        set_audit_context(request=request, user_name="anonymous")
+        response = await call_next(request)
+        clear_audit_context()
+        return response
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Auto-create SQLite DB + tables on startup.
-    init_db()
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as exc:
+        _logger.warning(
+            "DB tables sync skipped — %s: %s",
+            type(exc).__name__,
+            exc,
+        )
     yield
 
 
@@ -46,6 +90,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Inject audit context for endpoints
+app.add_middleware(AuditContextMiddleware)
+
 # Database Error Handler (catches all DB errors globally)
 app.add_middleware(DatabaseErrorMiddleware)
 
@@ -57,12 +104,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 
 # Include routers
-# Auth endpoints (under /api/v1 prefix - matches production)
-app.include_router(auth.router, prefix="/api/v1")
-app.include_router(forgot_password.router, prefix="/api/v1")
-
-# Other endpoints (with /api/v1 prefix)
-app.include_router(mo_daily_transactions.router, prefix="/api/v1")
+app.include_router(api_router, prefix="/api/v1")
 
 
 @app.get("/")

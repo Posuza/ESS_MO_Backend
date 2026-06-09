@@ -1,0 +1,51 @@
+[
+    {
+        "column_name": "location_log_id",
+        "data_type": "INTEGER",
+        "is_primary_key": true,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "employee_code",
+        "data_type": "VARCHAR(6)",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "location_id",
+        "data_type": "INTEGER",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "user_name",
+        "data_type": "VARCHAR(150)",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "action",
+        "data_type": "TEXT",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": null
+    },
+    {
+        "column_name": "created_at",
+        "data_type": "DATETIME",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "CURRENT_TIMESTAMP"
+    },
+    {
+        "column_name": "updated_at",
+        "data_type": "DATETIME",
+        "is_primary_key": false,
+        "is_nullable": false,
+        "default_value": "CURRENT_TIMESTAMP"
+    }
+]
