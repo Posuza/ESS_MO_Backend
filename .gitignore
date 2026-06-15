@@ -25,6 +25,15 @@ htmlcov/
 
 # Dotenv and local config
 .env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+.env.staging
+.env.staging.local
 .env.*
 local_settings.py
 dev.*
@@ -50,8 +59,12 @@ logs/
 uploads/
 *.pem
 
-# Project scripts (do not include in repo)
+# Qodo / AI workspace
+.qodo/
+
+# Project scripts & data (do not include in repo)
 scripts/
+jsons/
 
 # Docker overrides
 docker-compose.override.yml

@@ -65,25 +65,25 @@ async def employee_login(credentials: EmployeeLogin, db: Session = Depends(get_d
 
 @router.post("/logout", response_model=LogoutResponse)
 async def employee_logout(
-    request: LogoutRequest,
+    employee_code: str,
     http_request: Request,
     db: Session = Depends(get_db),
 ):
-    """Logout. Audit logged in service layer."""
+    """Logout. Accepts employee_code as query param (?employee_code=XXX). Audit logged in service layer."""
     employee = (
-        db.query(Employee).filter(Employee.employee_code == request.employee_code).first()
+        db.query(Employee).filter(Employee.employee_code == employee_code).first()
     )
     employee_name = (
         employee_auth_service.get_employee_display_name(employee)
         if employee
-        else request.employee_code
+        else employee_code
     )
     set_audit_context(
         request=http_request,
         user_name=employee_name,
-        employee_code=request.employee_code,
+        employee_code=employee_code,
     )
-    return employee_auth_service.logout(employee_code=request.employee_code)
+    return employee_auth_service.logout(employee_code=employee_code)
 
 
 @router.post("/forgot-password", response_model=MessageResponse)

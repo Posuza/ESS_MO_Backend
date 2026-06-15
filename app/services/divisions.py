@@ -1,90 +1,45 @@
-from app.core import response
-from app.core.orm import get_session
+from typing import List, Optional
+
+from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.models.divisions import Division
-from app.schemas.divisions import DivisionCreate, DivisionUpdate
-from sqlalchemy import func, select, update
+from app.models.employees import Employee
+
+# ── Access levels (mirrors frontEnd/src/utils/positionAccess.ts) ──
+
+
+class _AccessLevel:
+    ALL_DEPT = "ALL_DEPT"
+    DIVISION_ONLY = "DIVISION_ONLY"
+
+
+def _get_access_level(position_id: int | None) -> str:
+    if position_id in (1, 5):
+        return _AccessLevel.ALL_DEPT
+    return _AccessLevel.DIVISION_ONLY  # positions 2,3,4,6 + default
 
 
 class DivisionService:
-    def list_divisions(self) -> list[dict]:
-        with get_session() as session:
-            rows = (
-                session.execute(select(Division).order_by(Division.division_id.desc()))
-                .scalars()
-                .all()
-            )
-            return [row.__dict__ for row in rows]
+    """Service layer for Division operations."""
 
-    def create_division(self, payload: DivisionCreate) -> dict:
-        p = payload.model_dump()
+    @staticmethod
+    def list_by_department(
+        db: Session,
+        department_id: Optional[int] = None,
+        current_employee: Employee | None = None,
+    ) -> List[Division]:
+        stmt = select(Division)
+        if department_id is not None:
+            stmt = stmt.where(Division.department_id == department_id)
 
-        with get_session() as session:
-            division_entry = Division(
-                division_name=p["division_name"],
-                field_id=p["field_id"],
-                department_id=p["department_id"],
-                is_active=p["is_active"],
-                created_by=p["created_by"],
-                updated_by=p["created_by"],  # Can mirror created_by initially
-                created_at=func.now(),
-                updated_at=func.now(),
-            )
-            session.add(division_entry)
-            session.commit()
-            session.refresh(division_entry)
-            return division_entry.__dict__
+        # Apply position-based access filtering
+        if current_employee is not None:
+            level = _get_access_level(current_employee.position_id)
+            if level == _AccessLevel.DIVISION_ONLY:
+                stmt = stmt.where(Division.division_id == current_employee.division_id)
+            # ALL_DEPT → no extra filter (sees all divisions in department)
 
-    def get_division(self, division_id: int) -> dict:
-        with get_session() as session:
-            row = (
-                session.execute(
-                    select(Division).where(Division.division_id == division_id)
-                )
-                .scalars()
-                .first()
-            )
-        if not row:
-            raise response.error("CLIENT.ER_CLIENT_2002")
-        return row.__dict__
-
-    def update_division(self, division_id: int, payload: DivisionUpdate) -> dict:
-        with get_session() as session:
-            existing = session.execute(
-                select(Division.division_id).where(Division.division_id == division_id)
-            ).first()
-            if not existing:
-                raise response.error("CLIENT.ER_CLIENT_2002")
-
-        updates = payload.model_dump(exclude_unset=True)
-        if not updates:
-            raise response.error("CLIENT.ER_CLIENT_2001")
-
-        updates["updated_at"] = func.now()
-
-        with get_session() as session:
-            session.execute(
-                update(Division)
-                .where(Division.division_id == division_id)
-                .values(**updates)
-            )
-            session.commit()
-
-        return self.get_division(division_id)
-
-    def delete_division(self, division_id: int) -> dict:
-        with get_session() as session:
-            division_entry = (
-                session.execute(
-                    select(Division).where(Division.division_id == division_id)
-                )
-                .scalars()
-                .first()
-            )
-
-            if not division_entry:
-                raise response.error("CLIENT.ER_CLIENT_2002")
-
-            session.delete(division_entry)
-            session.commit()
-
-        return {"detail": "Division deleted successfully"}
+        stmt = stmt.order_by(Division.division_name)
+        return db.execute(stmt).scalars().all()

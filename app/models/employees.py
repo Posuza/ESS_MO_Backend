@@ -46,7 +46,7 @@ class Employee(Base):
     phone_number: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
 
     address_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("address.address_id"), nullable=True
+        Integer, ForeignKey("addresses.address_id"), nullable=True
     )
     field_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("fields.field_id"), nullable=False

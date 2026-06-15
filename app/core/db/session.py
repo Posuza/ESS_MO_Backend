@@ -7,7 +7,12 @@ import socket
 from contextlib import contextmanager
 
 from fastapi import HTTPException, status
-from sqlalchemy.exc import DatabaseError, InterfaceError, OperationalError
+from sqlalchemy.exc import (
+    DatabaseError,
+    IntegrityError,
+    InterfaceError,
+    OperationalError,
+)
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -36,8 +41,12 @@ def _is_db_port_open(timeout: float = 0.3) -> bool:
         return False
 
 
-def _raise_db_error(error_msg: str = ""):
-    """Map a DB connection error to the correct message and raise HTTPException."""
+def _raise_db_error(error_msg: str = "") -> None:
+    """Map a DB connection error to the correct message and raise HTTPException.
+
+    NOTE: IntegrityError is NOT handled here — it is caught separately in
+    get_session/get_db so it can propagate to the middleware as-is.
+    """
     msg_lower = error_msg.lower()
     if "1129" in msg_lower or "blocked" in msg_lower:
         detail = DATABASE_ERROR_HOST_BLOCKED
@@ -65,6 +74,9 @@ def get_db():
 
     try:
         yield db
+    except IntegrityError:
+        db.rollback()
+        raise
     except (DatabaseError, OperationalError, InterfaceError) as e:
         _raise_db_error(str(e))
     finally:
@@ -87,6 +99,9 @@ def get_session() -> Session:
 
     try:
         yield session
+    except IntegrityError:
+        session.rollback()
+        raise
     except (DatabaseError, OperationalError, InterfaceError) as e:
         _raise_db_error(str(e))
     finally:

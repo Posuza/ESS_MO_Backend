@@ -3,5 +3,6 @@
 __all__ = [
     "mo_daily_transactions",
     "mo_daily_transaction_detail_1",
-    "mo_daily_transaction_detail_2",
+    "mo_daily_transaction_project",
+    "mo_transaction_discipline_warning",
 ]

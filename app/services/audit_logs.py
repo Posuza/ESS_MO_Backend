@@ -15,8 +15,12 @@ class AuditLogService:
             data = payload.model_dump() if hasattr(payload, "model_dump") else payload
             log = AuditLog(**data)
             session.add(log)
-            session.commit()
-            session.refresh(log)
+            try:
+                session.commit()
+                session.refresh(log)
+            except Exception:
+                session.rollback()
+                raise
             return {k: v for k, v in log.__dict__.items() if not k.startswith("_")}
 
     def list_logs(

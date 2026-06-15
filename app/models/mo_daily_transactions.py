@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func, text
+from sqlalchemy import Boolean, DateTime, Integer, String, Text, func, text
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,7 +14,7 @@ from app.core.orm import Base
 class ApprovedStatusEnum(str, Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
-    REJECT = "REJECT"
+    REJECTED = "REJECTED"
 
 
 class MoDailyTransaction(Base):
@@ -23,13 +23,23 @@ class MoDailyTransaction(Base):
     mo_daily_transaction_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True, index=True
     )
-    department_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("departments.department_id"), nullable=False
+    department_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    department_name: Mapped[str] = mapped_column(
+        String(150),
+        nullable=False,
+        default="",
+        comment="Snapshot of department name at creation",
     )
-    sub_location: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    division_id: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    division_name: Mapped[str] = mapped_column(
+        String(150),
+        nullable=False,
+        default="",
+        comment="Snapshot of division name at creation",
+    )
 
     approved_by: Mapped[Optional[str]] = mapped_column(
-        String(6), ForeignKey("employees.employee_code"), nullable=True
+        String(6), nullable=True, comment="Approver employee code (snapshot)"
     )
     approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     approved_status: Mapped[ApprovedStatusEnum] = mapped_column(
@@ -55,8 +65,8 @@ class MoDailyTransaction(Base):
     )
 
     created_by: Mapped[str] = mapped_column(
-        String(6), ForeignKey("employees.employee_code"), nullable=False
+        String(6), nullable=False, comment="Creator employee code (snapshot)"
     )
     updated_by: Mapped[Optional[str]] = mapped_column(
-        String(6), ForeignKey("employees.employee_code"), nullable=True
+        String(6), nullable=True, comment="Last updater employee code (snapshot)"
     )

@@ -3,7 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func, text
+from sqlalchemy import (
+    BigInteger,  # ← MySQL production uses BIGINT — no DB change needed
+    DateTime,
+    ForeignKey,
+    Integer,  # ← SQLite dev / local — INTEGER PRIMARY KEY auto-increments
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.orm import Base
@@ -13,7 +22,11 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     log_id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True, nullable=False
+        # BigInteger, Identity(always=True), primary_key=True, nullable=False
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+        nullable=False,
     )
     # NULL when the action is performed by an unauthenticated user (e.g. failed login)
     employee_code: Mapped[Optional[str]] = mapped_column(

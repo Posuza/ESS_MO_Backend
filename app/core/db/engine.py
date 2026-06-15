@@ -27,7 +27,10 @@ def _sqlite_path() -> str:
     """Resolve the SQLite path relative to the project root."""
     path = settings.SQLITE_PATH
     if not os.path.isabs(path):
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # engine.py is at app/core/db/ → go up 4 levels to reach backEnd/
+        base = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        )
         path = os.path.join(base, path)
     return path
 

@@ -8,52 +8,67 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.employees import Employee
-from app.models.mo_daily_transaction_detail_1 import MoDailyTransactionDetail1
-from app.models.mo_daily_transaction_detail_2 import MoDailyTransactionDetail2
+from app.models.mo_daily_transaction_details import MoDailyTransactionDetail1
+from app.models.mo_daily_transaction_project import MoDailyTransactionProject
 from app.models.mo_daily_transactions import ApprovedStatusEnum, MoDailyTransaction
+from app.models.mo_transaction_discipline_warning import MoTransactionDisciplineWarning
 from app.models.positions import Position
 from app.schemas.mo_daily_transactions import (
     MoDailyTransactionCreate,
     MoDailyTransactionResponse,
     MoDailyTransactionUpdate,
+    SectorReportDiscipline,
     SectorReportProject,
 )
 
-# ─── Field mappings ──────────────────────────────────────────────────────────
-# Detail 1 fields: (key_in_detail1, field_name_in_flat_payload)
-DETAIL_1_FIELDS = [
-    ("1.1", "dept_guard_post_count"),
-    ("1.2", "dept_current_personnel_count"),
-    ("1.3", "dept_missing_regular_count"),
-    ("1.4", "dept_missing_personnel_count"),
-    ("1.5", "dept_supplement_count"),
-    ("1.6", "dept_recruitment_count"),
-    ("1.7", "dept_reserve_units_count"),
-    ("1.8", "dept_reserve_personnel_count"),
-    ("2.1", "leave_personal_count"),
-    ("2.2", "leave_sick_count"),
-    ("2.3", "leave_absent_count"),
-    ("2.4", "leave_deserted_count"),
-    ("2.5", "leave_resigned_count"),
-    ("2.6", "leave_terminated_count"),
-    ("3.1", "shift_18_count"),
-    ("3.2", "shift_24_count"),
-    ("3.3", "shift_36_count"),
-    ("4.1", "training_shift_change_count"),
-    ("4.2", "training_planned_count"),
-    ("4.3", "training_duty_control_count"),
+# ─── All Detail 1 column names (map directly to model columns) ────────────
+DETAIL_1_COLUMNS = [
+    # dept
+    "dept_guard_post_count",
+    "dept_current_personnel_count",
+    "dept_missing_regular_count",
+    "dept_missing_personnel_count",
+    "dept_supplement_count",
+    "dept_recruitment_count",
+    "dept_reserve_units_count",
+    "dept_reserve_personnel_count",
+    "dept_extra_1",
+    "dept_extra_2",
+    "dept_extra_3",
+    "dept_extra_4",
+    "dept_extra_5",
+    # leave
+    "leave_personal_count",
+    "leave_sick_count",
+    "leave_absent_count",
+    "leave_deserted_count",
+    "leave_resigned_count",
+    "leave_terminated_count",
+    "leave_extra_1",
+    "leave_extra_2",
+    "leave_extra_3",
+    "leave_extra_4",
+    "leave_extra_5",
+    # shift
+    "shift_18_count",
+    "shift_24_count",
+    "shift_36_count",
+    "shift_extra_1",
+    "shift_extra_2",
+    "shift_extra_3",
+    "shift_extra_4",
+    "shift_extra_5",
+    # training
+    "training_shift_change_count",
+    "training_planned_count",
+    "training_duty_control_count",
+    "training_extra_1",
+    "training_extra_2",
+    "training_extra_3",
+    "training_extra_4",
+    "training_extra_5",
 ]
-DETAIL_1_BY_KEY = dict(DETAIL_1_FIELDS)
-DETAIL_1_BY_NAME = {name: key for key, name in DETAIL_1_FIELDS}
-
-# Legacy field aliases: (standardized_name, legacy_name)
-LEGACY_ALIASES = {
-    "leave_personal_count": "leave_business_count",
-    "leave_absent_count": "absent_count",
-    "discipline_phone_count": "rule_use_phone_count",
-    "discipline_belt_count": "rule_sleep_count",
-    "discipline_badge_count": "rule_no_card_count",
-}
+DETAIL_1_SET = set(DETAIL_1_COLUMNS)
 
 
 class MoDailyTransactionService:
@@ -110,12 +125,8 @@ class MoDailyTransactionService:
 
     @staticmethod
     def _normalize_flat(data: dict) -> dict:
-        """Resolve legacy field aliases into standardized names."""
-        n = dict(data)
-        for standard, legacy in LEGACY_ALIASES.items():
-            if legacy in n and standard not in n:
-                n[standard] = n[legacy]
-        return n
+        """Return a mutable copy of data."""
+        return dict(data)
 
     @staticmethod
     def _build_response(txn: MoDailyTransaction, db: Session) -> dict:
@@ -124,7 +135,9 @@ class MoDailyTransactionService:
             "id": txn.mo_daily_transaction_id,
             "mo_daily_transaction_id": txn.mo_daily_transaction_id,
             "department_id": txn.department_id,
-            "sub_location": txn.sub_location,
+            "department_name": txn.department_name,
+            "division_id": txn.division_id,
+            "division_name": txn.division_name,
             "report_date": txn.created_at.date().isoformat()
             if txn.created_at
             else None,
@@ -141,12 +154,12 @@ class MoDailyTransactionService:
             "updated_by": txn.updated_by,
         }
 
-        # Default all detail1 count fields to 0
-        for _, name in DETAIL_1_FIELDS:
-            data[name] = 0
+        # Default all detail1 fields to 0
+        for col in DETAIL_1_COLUMNS:
+            data[col] = 0
 
-        # Load detail1 rows
-        detail1_rows = (
+        # Load the single detail1 row (1:1 with transaction)
+        d1 = (
             db.execute(
                 select(MoDailyTransactionDetail1).where(
                     MoDailyTransactionDetail1.mo_daily_transaction_id
@@ -154,37 +167,56 @@ class MoDailyTransactionService:
                 )
             )
             .scalars()
-            .all()
+            .first()
         )
-        for row in detail1_rows:
-            field_name = DETAIL_1_BY_KEY.get(row.field_key)
-            if field_name:
-                data[field_name] = MoDailyTransactionService._as_int(row.field_value)
+        if d1:
+            for col in DETAIL_1_COLUMNS:
+                data[col] = MoDailyTransactionService._as_int(getattr(d1, col, "0"))
 
-        # Populate legacy aliases from standardized values
-        for standard, legacy in LEGACY_ALIASES.items():
-            data[legacy] = data.get(standard, 0)
-
-        # Load detail2 → projects
-        detail2_rows = (
+        # Load disciplines
+        discipline_rows = (
             db.execute(
-                select(MoDailyTransactionDetail2)
+                select(MoTransactionDisciplineWarning)
                 .where(
-                    MoDailyTransactionDetail2.mo_daily_transaction_id
+                    MoTransactionDisciplineWarning.mo_daily_transaction_id
                     == txn.mo_daily_transaction_id
                 )
-                .order_by(MoDailyTransactionDetail2.created_at)
+                .order_by(MoTransactionDisciplineWarning.created_at)
+            )
+            .scalars()
+            .all()
+        )
+
+        disciplines = []
+        for row in discipline_rows:
+            disciplines.append(
+                {
+                    "key": row.key,
+                    "label": row.label,
+                    "value": MoDailyTransactionService._as_int(row.value),
+                }
+            )
+        data["disciplines"] = disciplines
+
+        # Load projects
+        project_rows = (
+            db.execute(
+                select(MoDailyTransactionProject)
+                .where(
+                    MoDailyTransactionProject.mo_daily_transaction_id
+                    == txn.mo_daily_transaction_id
+                )
+                .order_by(MoDailyTransactionProject.created_at)
             )
             .scalars()
             .all()
         )
 
         projects = []
-        for row in detail2_rows:
+        for row in project_rows:
             projects.append(
                 {
-                    "key": row.key,
-                    "label": row.label,
+                    "name": row.project_name,
                     "detail": row.detail or "",
                     "status": row.status or "normal",
                     "note": row.note or "",
@@ -201,16 +233,62 @@ class MoDailyTransactionService:
                 MoDailyTransactionDetail1.mo_daily_transaction_id == txn_id
             )
         )
+        values = {"mo_daily_transaction_id": txn_id}
+        for col in DETAIL_1_COLUMNS:
+            values[col] = MoDailyTransactionService._as_int(payload.get(col))
+        db.add(MoDailyTransactionDetail1(**values))
+
+    @staticmethod
+    def _get_next_discipline_custom_id(db: Session) -> int:
+        """Find the biggest numeric suffix from discipline_custom_N keys."""
+        rows = (
+            db.execute(
+                select(MoTransactionDisciplineWarning.key).where(
+                    MoTransactionDisciplineWarning.key.like("discipline_custom_%")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        max_num = 0
+        for key in rows:
+            parts = key.rsplit("_", 1)
+            if len(parts) == 2:
+                try:
+                    num = int(parts[1])
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    pass
+        return max_num
+
+    @staticmethod
+    def _replace_disciplines(db: Session, txn_id: int, payload: dict) -> None:
+        db.execute(
+            delete(MoTransactionDisciplineWarning).where(
+                MoTransactionDisciplineWarning.mo_daily_transaction_id == txn_id
+            )
+        )
         rows = []
-        for sort_order, (field_key, field_name) in enumerate(DETAIL_1_FIELDS, start=1):
+        next_custom_id = MoDailyTransactionService._get_next_discipline_custom_id(db)
+        for disc_data in payload.get("disciplines") or []:
+            if hasattr(disc_data, "model_dump"):
+                disc_data = disc_data.model_dump()
+            elif not isinstance(disc_data, dict):
+                disc_data = dict(disc_data)
+
+            # Auto-generate key if null, empty, or starts with "discipline_custom_" or "auto_gen"
+            raw_key = str(disc_data.get("key", "") or "")
+            if not raw_key or raw_key.startswith(("discipline_custom_", "auto_gen")):
+                next_custom_id += 1
+                raw_key = f"discipline_custom_{next_custom_id}"
+
             rows.append(
-                MoDailyTransactionDetail1(
+                MoTransactionDisciplineWarning(
                     mo_daily_transaction_id=txn_id,
-                    field_key=field_key,
-                    field_value=str(
-                        MoDailyTransactionService._as_int(payload.get(field_name))
-                    ),
-                    sort_order=sort_order,
+                    key=raw_key,
+                    label=disc_data.get("label", ""),
+                    value=MoDailyTransactionService._as_int(disc_data.get("value")),
                 )
             )
         db.add_all(rows)
@@ -218,8 +296,8 @@ class MoDailyTransactionService:
     @staticmethod
     def _replace_detail2(db: Session, txn_id: int, payload: dict) -> None:
         db.execute(
-            delete(MoDailyTransactionDetail2).where(
-                MoDailyTransactionDetail2.mo_daily_transaction_id == txn_id
+            delete(MoDailyTransactionProject).where(
+                MoDailyTransactionProject.mo_daily_transaction_id == txn_id
             )
         )
         rows = []
@@ -232,10 +310,9 @@ class MoDailyTransactionService:
             elif not isinstance(project_data, dict):
                 project_data = dict(project_data)
             rows.append(
-                MoDailyTransactionDetail2(
+                MoDailyTransactionProject(
                     mo_daily_transaction_id=txn_id,
-                    key=str(project_data.get("key", f"6.{sort_order}")),
-                    label=project_data.get("label", ""),
+                    project_name=project_data.get("name", ""),
                     detail=project_data.get("detail", ""),
                     status=project_data.get("status", "normal"),
                     note=project_data.get("note", ""),
@@ -301,7 +378,7 @@ class MoDailyTransactionService:
 
         if data.get("approved_status") in {
             ApprovedStatusEnum.APPROVED.value,
-            ApprovedStatusEnum.REJECT.value,
+            ApprovedStatusEnum.REJECTED.value,
         }:
             data["approved_by"] = (
                 data.get("approved_by") or actor_employee.employee_code
@@ -310,7 +387,9 @@ class MoDailyTransactionService:
 
         txn = MoDailyTransaction(
             department_id=data["department_id"],
-            sub_location=data.get("sub_location"),
+            department_name=data.get("department_name", ""),
+            division_id=data.get("division_id"),
+            division_name=data.get("division_name"),
             approved_by=data.get("approved_by"),
             approved_status=data.get("approved_status") or ApprovedStatusEnum.PENDING,
             approved_at=data.get("approved_at"),
@@ -322,6 +401,9 @@ class MoDailyTransactionService:
         db.refresh(txn)
 
         MoDailyTransactionService._replace_detail1(
+            db, txn.mo_daily_transaction_id, data
+        )
+        MoDailyTransactionService._replace_disciplines(
             db, txn.mo_daily_transaction_id, data
         )
         MoDailyTransactionService._replace_detail2(
@@ -386,14 +468,14 @@ class MoDailyTransactionService:
         )
 
         # Update main transaction fields
-        for field in ("sub_location", "approved_by", "approved_remark"):
+        for field in ("division_id", "division_name", "approved_by", "approved_remark"):
             if field in data:
                 setattr(txn, field, data[field])
         if "approved_status" in data:
             txn.approved_status = data["approved_status"]
         if data.get("approved_status") in {
             ApprovedStatusEnum.APPROVED.value,
-            ApprovedStatusEnum.REJECT.value,
+            ApprovedStatusEnum.REJECTED.value,
         }:
             if not txn.approved_by:
                 txn.approved_by = actor_employee.employee_code
@@ -405,9 +487,14 @@ class MoDailyTransactionService:
         db.commit()
 
         # Replace detail rows (only if any detail1 fields are in payload)
-        has_detail_fields = any(name in data for _, name in DETAIL_1_FIELDS)
+        has_detail_fields = any(name in data for name in DETAIL_1_COLUMNS)
         if has_detail_fields:
             MoDailyTransactionService._replace_detail1(
+                db, txn.mo_daily_transaction_id, data
+            )
+
+        if "disciplines" in data:
+            MoDailyTransactionService._replace_disciplines(
                 db, txn.mo_daily_transaction_id, data
             )
 
@@ -453,8 +540,14 @@ class MoDailyTransactionService:
             )
         )
         db.execute(
-            delete(MoDailyTransactionDetail2).where(
-                MoDailyTransactionDetail2.mo_daily_transaction_id
+            delete(MoTransactionDisciplineWarning).where(
+                MoTransactionDisciplineWarning.mo_daily_transaction_id
+                == mo_daily_transaction_id
+            )
+        )
+        db.execute(
+            delete(MoDailyTransactionProject).where(
+                MoDailyTransactionProject.mo_daily_transaction_id
                 == mo_daily_transaction_id
             )
         )

@@ -4,11 +4,20 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 
-class SectorReportProject(BaseModel):
-    """A single meeting/project item (stored in detail2)."""
+class SectorReportDiscipline(BaseModel):
+    """A single discipline/warning item (dynamic key-value)."""
 
     key: str = ""
     label: str = ""
+    value: int = 0
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class SectorReportProject(BaseModel):
+    """A single meeting/project item (stored in transaction_projects)."""
+
+    name: str = ""
     detail: str = ""
     status: str = "normal"
     note: str = ""
@@ -20,7 +29,9 @@ class MoDailyTransactionCreate(BaseModel):
     """Flat create — all fields in one body, matching what frontend sends."""
 
     department_id: int
-    sub_location: Optional[str] = None
+    department_name: str = ""
+    division_id: int = 0
+    division_name: str = ""
     created_by: Optional[str] = None
     approved_by: Optional[str] = None
     approved_status: Optional[str] = None
@@ -43,6 +54,11 @@ class MoDailyTransactionCreate(BaseModel):
     leave_deserted_count: int = 0
     leave_resigned_count: int = 0
     leave_terminated_count: int = 0
+    leave_extra_1: int = 0
+    leave_extra_2: int = 0
+    leave_extra_3: int = 0
+    leave_extra_4: int = 0
+    leave_extra_5: int = 0
 
     # Detail 1 — การบริหารการควงเวร
     shift_18_count: int = 0
@@ -54,32 +70,11 @@ class MoDailyTransactionCreate(BaseModel):
     training_planned_count: int = 0
     training_duty_control_count: int = 0
 
-    # Detail 1 — วินัย (legacy fields mapped to detail1)
-    discipline_phone_count: int = 0
-    discipline_belt_count: int = 0
-    discipline_badge_count: int = 0
-    discipline_uniform_count: int = 0
-    discipline_custom_1: int = 0
-
-    # Legacy compat fields (mapped to detail1)
-    leave_business_count: Optional[int] = None
-    absent_count: Optional[int] = None
-    rule_sleep_count: Optional[int] = None
-    rule_use_phone_count: Optional[int] = None
-    rule_no_card_count: Optional[int] = None
-    warning: Optional[str] = None
-    wear_hat_count: int = 0
-    wear_shirt_count: int = 0
-    wear_pant_count: int = 0
-    wear_shoe_count: int = 0
-    other_job: Optional[str] = None
-    other_job_count: int = 0
-    other_training: Optional[str] = None
-    other_training_count: int = 0
-    other_extral: Optional[str] = None
-
     # Detail 2 — projects/meetings
     projects: List[SectorReportProject] = []
+
+    # Dynamic disciplines/warnings
+    disciplines: List[SectorReportDiscipline] = []
 
     model_config = ConfigDict(extra="ignore")
 
@@ -87,7 +82,8 @@ class MoDailyTransactionCreate(BaseModel):
 class MoDailyTransactionUpdate(BaseModel):
     """Flat partial update."""
 
-    sub_location: Optional[str] = None
+    division_id: int = 0
+    division_name: str = ""
     approved_by: Optional[str] = None
     approved_status: Optional[str] = None
     approved_remark: Optional[str] = None
@@ -107,6 +103,11 @@ class MoDailyTransactionUpdate(BaseModel):
     leave_deserted_count: Optional[int] = None
     leave_resigned_count: Optional[int] = None
     leave_terminated_count: Optional[int] = None
+    leave_extra_1: Optional[int] = None
+    leave_extra_2: Optional[int] = None
+    leave_extra_3: Optional[int] = None
+    leave_extra_4: Optional[int] = None
+    leave_extra_5: Optional[int] = None
 
     shift_18_count: Optional[int] = None
     shift_24_count: Optional[int] = None
@@ -116,29 +117,10 @@ class MoDailyTransactionUpdate(BaseModel):
     training_planned_count: Optional[int] = None
     training_duty_control_count: Optional[int] = None
 
-    discipline_phone_count: Optional[int] = None
-    discipline_belt_count: Optional[int] = None
-    discipline_badge_count: Optional[int] = None
-    discipline_uniform_count: Optional[int] = None
-    discipline_custom_1: Optional[int] = None
-
-    leave_business_count: Optional[int] = None
-    absent_count: Optional[int] = None
-    rule_sleep_count: Optional[int] = None
-    rule_use_phone_count: Optional[int] = None
-    rule_no_card_count: Optional[int] = None
-    warning: Optional[str] = None
-    wear_hat_count: Optional[int] = None
-    wear_shirt_count: Optional[int] = None
-    wear_pant_count: Optional[int] = None
-    wear_shoe_count: Optional[int] = None
-    other_job: Optional[str] = None
-    other_job_count: Optional[int] = None
-    other_training: Optional[str] = None
-    other_training_count: Optional[int] = None
-    other_extral: Optional[str] = None
-
     projects: Optional[List[SectorReportProject]] = None
+
+    # Dynamic disciplines/warnings
+    disciplines: Optional[List[SectorReportDiscipline]] = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -149,7 +131,9 @@ class MoDailyTransactionResponse(BaseModel):
     id: int
     mo_daily_transaction_id: int
     department_id: int
-    sub_location: Optional[str] = None
+    department_name: str = ""
+    division_id: int = 0
+    division_name: str = ""
     report_date: Optional[str] = None
     status: Optional[str] = None
     approved_status: Optional[str] = None
@@ -176,36 +160,22 @@ class MoDailyTransactionResponse(BaseModel):
     leave_deserted_count: int = 0
     leave_resigned_count: int = 0
     leave_terminated_count: int = 0
+    leave_extra_1: int = 0
+    leave_extra_2: int = 0
+    leave_extra_3: int = 0
+    leave_extra_4: int = 0
+    leave_extra_5: int = 0
     shift_18_count: int = 0
     shift_24_count: int = 0
     shift_36_count: int = 0
     training_shift_change_count: int = 0
     training_planned_count: int = 0
     training_duty_control_count: int = 0
-    discipline_phone_count: int = 0
-    discipline_belt_count: int = 0
-    discipline_badge_count: int = 0
-    discipline_uniform_count: int = 0
-    discipline_custom_1: int = 0
-
-    # Legacy compat
-    leave_business_count: int = 0
-    absent_count: int = 0
-    rule_sleep_count: int = 0
-    rule_use_phone_count: int = 0
-    rule_no_card_count: int = 0
-    warning: Optional[str] = None
-    wear_hat_count: int = 0
-    wear_shirt_count: int = 0
-    wear_pant_count: int = 0
-    wear_shoe_count: int = 0
-    other_job: Optional[str] = None
-    other_job_count: int = 0
-    other_training: Optional[str] = None
-    other_training_count: int = 0
-    other_extral: Optional[str] = None
 
     # Detail 2 — projects
     projects: List[SectorReportProject] = []
+
+    # Dynamic disciplines/warnings
+    disciplines: List[SectorReportDiscipline] = []
 
     model_config = ConfigDict(from_attributes=True)

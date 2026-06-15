@@ -9,14 +9,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.orm import Base
 
 
-class MoDailyTransactionDetail2(Base):
+class MoTransactionDisciplineWarning(Base):
     """
-    Detail table storing group3 meeting/activity data from the daily report.
+    Dynamic discipline/warning items from the daily report.
+
+    Stores individual discipline violation or warning entries
+    as dynamic key-value items (e.g. phone usage, belt, badge, uniform).
     """
 
-
-
-    __tablename__ = "mo_daily_transaction_detail_2"
+    __tablename__ = "mo_daily_transaction_discipline_warnings"
 
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True, index=True
@@ -28,22 +29,16 @@ class MoDailyTransactionDetail2(Base):
         index=True,
     )
     key: Mapped[str] = mapped_column(
-        String(20), nullable=False, comment="Item key, e.g. '1'"
+        String(30), nullable=False, comment="Item key, e.g. 'discipline_phone_count'"
     )
     label: Mapped[str] = mapped_column(
-        String(255), nullable=False, comment="Display label"
+        String(255), nullable=False, comment="Display label in Thai"
     )
-    detail: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True, comment="Meeting/detail description"
-    )
-    status: Mapped[Optional[str]] = mapped_column(
-        String(20),
-        nullable=True,
-        default="normal",
-        comment="'normal' | 'warning' | 'danger'",
-    )
-    note: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True, comment="Additional note"
+    value: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Count/value of the discipline item",
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -63,7 +58,7 @@ class MoDailyTransactionDetail2(Base):
 
     def __repr__(self) -> str:
         return (
-            f"<MoDailyTransactionDetail2(id={self.id}, "
+            f"<MoTransactionDisciplineWarning(id={self.id}, "
             f"txn={self.mo_daily_transaction_id}, "
-            f"key={self.key!r}, label={self.label!r})>"
+            f"key={self.key!r}, label={self.label!r}, value={self.value})>"
         )
