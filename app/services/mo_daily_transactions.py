@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from fastapi import HTTPException, status
@@ -379,6 +379,27 @@ class MoDailyTransactionService:
             actor_employee, data["department_id"], db
         )
 
+        # ── Duplicate check: same department + division for today ────────────
+        today = date.today()
+        existing = (
+            db.execute(
+                select(MoDailyTransaction).where(
+                    MoDailyTransaction.department_id == data["department_id"],
+                    MoDailyTransaction.division_id == data.get("division_id", 0),
+                    func.date(MoDailyTransaction.created_at) == today,
+                )
+            )
+            .scalars()
+            .first()
+        )
+
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=("รายงานของหน่วยงานนี้ถูกสร้างไปแล้วในวันนี้ "),
+            )
+        # ────────────────────────────────────────────────────────────────────
+
         if data.get("approved_status") in {
             ApprovedStatusEnum.APPROVED.value,
             ApprovedStatusEnum.REJECTED.value,
@@ -434,7 +455,8 @@ class MoDailyTransactionService:
         )
         if not txn:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="ขออภัย รายการนี้ถูกลบไปแล้วโดยผู้สร้างหรือผู้อำนวยการ",
             )
         MoDailyTransactionService._enforce_same_department(
             actor_employee, txn.department_id, db
@@ -469,6 +491,14 @@ class MoDailyTransactionService:
         MoDailyTransactionService._enforce_same_department(
             actor_employee, txn.department_id, db
         )
+
+        # ── Prevent updates on already-approved reports ─────────────────────
+        if txn.approved_status == ApprovedStatusEnum.APPROVED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=("รายงานนี้ได้รับการอนุมัติแล้ว ไม่สามารถแก้ไขได้ "),
+            )
+        # ────────────────────────────────────────────────────────────────────
 
         # Update main transaction fields
         for field in ("division_id", "division_name", "approved_by", "approved_remark"):
@@ -529,7 +559,8 @@ class MoDailyTransactionService:
         )
         if not txn:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="ขออภัย รายการนี้ถูกลบไปแล้วโดยผู้สร้างหรือผู้อำนวยการ",
             )
         MoDailyTransactionService._enforce_same_department(
             actor_employee, txn.department_id, db
