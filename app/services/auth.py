@@ -27,6 +27,7 @@ from app.core.registries import (
     REGISTER,
 )
 from app.models.departments import Department
+from app.models.divisions import Division
 from app.models.employees import Employee
 from app.models.name_prefixs import NamePrefix
 from app.models.positions import Position
@@ -215,11 +216,17 @@ class EmployeeAuthService:
             .filter(Department.department_id == employee.department_id)
             .first()
         )
+        db_division = (
+            db.query(Division)
+            .filter(Division.division_id == employee.division_id)
+            .first()
+        )
 
         role_name = db_role.role_name if db_role else ""
         position_name = db_position.position_name if db_position else ""
         prefix_name = db_prefix.prefix_name if db_prefix else ""
         department_name = db_dept.department_name if db_dept else ""
+        division_name = db_division.division_name if db_division else ""
 
         return {
             "employee": {
@@ -231,8 +238,10 @@ class EmployeeAuthService:
                 "name_prefix": prefix_name,
                 "position_name": position_name,
                 "department_id": employee.department_id,
-                "position_id": employee.position_id,
                 "department_name": department_name,
+                "division_id": employee.division_id,
+                "division_name": division_name,
+                "position_id": employee.position_id,
             },
             "message": "Login successful",
         }

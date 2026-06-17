@@ -25,6 +25,7 @@ router = APIRouter()
 async def api_list_reports(
     http_request: Request,
     department_id: Optional[int] = Query(None),
+    division_id: Optional[int] = Query(None),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
     status: Optional[ApprovedStatusEnum] = Query(None),
@@ -36,6 +37,7 @@ async def api_list_reports(
         db=db,
         actor_employee=current_employee,
         department_id=department_id,
+        division_id=division_id,
         start_date=start_date,
         end_date=end_date,
         status=status,

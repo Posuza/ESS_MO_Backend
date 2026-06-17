@@ -68,6 +68,8 @@ class EmployeeInfo(BaseModel):
     name_prefix: str
     department_id: Optional[int] = None
     department_name: Optional[str] = None
+    division_id: Optional[int] = None
+    division_name: Optional[str] = None
     position_name: str
     position_id: Optional[int] = None
 

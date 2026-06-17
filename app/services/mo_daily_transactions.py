@@ -329,6 +329,7 @@ class MoDailyTransactionService:
         db: Session,
         actor_employee: Employee,
         department_id: Optional[int] = None,
+        division_id: Optional[int] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         status: Optional[ApprovedStatusEnum] = None,
@@ -348,6 +349,8 @@ class MoDailyTransactionService:
         stmt = select(MoDailyTransaction)
         if department_id is not None:
             stmt = stmt.where(MoDailyTransaction.department_id == department_id)
+        if division_id is not None:
+            stmt = stmt.where(MoDailyTransaction.division_id == division_id)
         if start_date:
             stmt = stmt.where(MoDailyTransaction.created_at >= start_date)
         if end_date:
