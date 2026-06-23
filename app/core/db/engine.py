@@ -17,7 +17,7 @@ from app.core.config import settings
 def _mysql_available() -> bool:
     """Check if MySQL driver is installed."""
     try:
-        import mysql.connector  # noqa: F401
+        import pymysql  # noqa: F401
     except ImportError:
         return False
     return True
@@ -53,8 +53,8 @@ def _build_database_url() -> str:
     if engine_setting == "mysql":
         if not _mysql_available():
             raise ImportError(
-                "DB_ENGINE=mysql but 'mysql-connector-python' is not installed. "
-                "Run: pip install mysql-connector-python\n"
+                "DB_ENGINE=mysql but 'pymysql' is not installed. "
+                "Run: pip install pymysql\n"
                 "Or set DB_ENGINE=sqlite in your .env to use the local SQLite database."
             )
         user = quote_plus(settings.DB_USER)
@@ -62,7 +62,7 @@ def _build_database_url() -> str:
         host = settings.DB_HOST
         port = settings.DB_PORT
         db_name = settings.DB_NAME
-        return f"mysql+mysqlconnector://{user}:{password}@{host}:{port}/{db_name}"
+        return f"mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}"
 
     # Unknown engine
     raise ValueError(

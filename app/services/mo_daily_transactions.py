@@ -492,12 +492,15 @@ class MoDailyTransactionService:
             actor_employee, txn.department_id, db
         )
 
-        # ── Prevent updates on already-approved reports ─────────────────────
+        # ── Prevent edits on already-approved reports, but allow Send Back ──
         if txn.approved_status == ApprovedStatusEnum.APPROVED:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=("รายงานนี้ได้รับการอนุมัติแล้ว ไม่สามารถแก้ไขได้ "),
-            )
+            new_status = data.get("approved_status")
+            # Allow Send Back (APPROVED → REJECTED)
+            if new_status != ApprovedStatusEnum.REJECTED.value:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=("รายงานนี้ได้รับการอนุมัติแล้ว ไม่สามารถแก้ไขได้ "),
+                )
         # ────────────────────────────────────────────────────────────────────
 
         # Update main transaction fields

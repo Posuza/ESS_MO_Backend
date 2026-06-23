@@ -52,14 +52,7 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        Base.metadata.create_all(bind=engine)
-    except Exception as exc:
-        _logger.warning(
-            "DB tables sync skipped — %s: %s",
-            type(exc).__name__,
-            exc,
-        )
+    _logger.info("Application startup: DB metadata auto-sync skipped")
     yield
 
 
