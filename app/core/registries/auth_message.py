@@ -6,24 +6,23 @@ from typing import Final
 # AUTH — Errors
 # =========================================================
 AUTH_ERROR_UNAUTHORIZED: Final[str] = (
-    "จำเป็นต้องยืนยันตัวตน โปรดเข้าสู่ระบบ. Contact SEC_OPS: sec-ops@gutsess.com"
+    "จำเป็นต้องยืนยันตัวตน โปรดเข้าสู่ระบบ. Plase contact to GutsEssCenter"
 )
 
 AUTH_ERROR_FORBIDDEN: Final[str] = (
-    "Access denied. Insufficient permissions. Contact SEC_OPS: sec-ops@gutsess.com"
+    "Access denied. Insufficient permissions. Plase contact to GutsEssCenter"
 )
 
 AUTH_ERROR_TOKEN_EXPIRED: Final[str] = (
-    "Session expired. Please refresh your token. Contact SEC_OPS: sec-ops@gutsess.com"
+    "Session expired. Please refresh your token. Plase contact to GutsEssCenter"
 )
 
 AUTH_ERROR_PROXY_AUTH_REQUIRED: Final[str] = (
-    "Proxy authentication required. Contact INFRA_CORE: infra@gutsess.com"
+    "Proxy authentication required. Plase contact to GutsEssCenter"
 )
 
 AUTH_ERROR_NETWORK_AUTH_REQUIRED: Final[str] = (
-    "Network authentication required to gain access. "
-    "Contact INFRA_CORE: infra@gutsess.com"
+    "Network authentication required to gain access. Plase contact to GutsEssCenter"
 )
 
 AUTH_ERROR_INVALID_CREDENTIALS: Final[str] = "รหัสผ่านไม่ถูกต้อง"
@@ -31,18 +30,17 @@ AUTH_ERROR_INVALID_CREDENTIALS: Final[str] = "รหัสผ่านไม่�
 AUTH_ERROR_INVALID_OLD_PASSWORD: Final[str] = "รหัสผ่านล่าสุดไม่ถูกต้อง"
 
 AUTH_ERROR_ACCOUNT_INACTIVE: Final[str] = (
-    "Account is inactive. Please contact administrator. "
-    "Contact SEC_OPS: sec-ops@gutsess.com"
+    "Account is inactive. Please contact administrator. Plase contact to GutsEssCenter"
 )
 
 AUTH_ERROR_ACCOUNT_INACTIVE_FORGOT_PASSWORD: Final[str] = (
     "Employee account is inactive. Please contact Human Resources. "
-    "Contact HR_OPS: hr@gutsess.com"
+    "Plase contact to GutsEssCenter"
 )
 
 AUTH_ERROR_ACCOUNT_LOCKED: Final[str] = (
     "Account is locked due to multiple failed login attempts. "
-    "Contact SEC_OPS: sec-ops@gutsess.com"
+    "Plase contact to GutsEssCenter"
 )
 
 AUTH_ERROR_EMPLOYEE_NOT_FOUND: Final[str] = (
@@ -52,7 +50,7 @@ AUTH_ERROR_EMPLOYEE_NOT_FOUND: Final[str] = (
 AUTH_ERROR_NO_EMAIL_REGISTERED: Final[str] = (
     "ไม่พบอีเมลที่ลงทะเบียนไว้สำหรับรหัสพนักงานนี้ "
     "โปรดติดต่อฝ่ายทรัพยากรบุคคล. "
-    "Contact HR_OPS: hr@gutsess.com"
+    "Plase contact to GutsEssCenter"
 )
 
 
