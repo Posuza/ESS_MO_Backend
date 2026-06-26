@@ -32,6 +32,7 @@ from app.models.employees import Employee
 from app.models.name_prefixs import NamePrefix
 from app.models.positions import Position
 from app.models.roles import Role
+from app.models.routes import Route
 from app.services.email import (
     send_change_password_notification_email,
     send_plain_password_email,
@@ -143,16 +144,6 @@ class EmployeeAuthService:
     ) -> Employee:
         """
         Authenticate employee by code and password.
-
-        Audits:
-          - LOGIN_ATTEMPT — always, even on failure
-          - LOGIN_SUCCESS — on successful auth only
-
-        Returns:
-            Employee object if authentication successful
-
-        Raises:
-            HTTPException: If authentication fails
         """
         employee = (
             db.query(Employee).filter(Employee.employee_code == employee_code).first()
@@ -190,9 +181,6 @@ class EmployeeAuthService:
     def logout(employee_code: str) -> dict:
         """
         Record logout audit and return standard response.
-
-        Audits: LOGOUT_SUCCESS — user_name/employee_code resolved from the
-        current request audit context when set by the endpoint.
         """
         audit_logger.log(action=LOGOUT_SUCCESS.format(resource="Employee"))
         return {"message": "Successfully logged out", "tokens_revoked": 0}
@@ -221,12 +209,14 @@ class EmployeeAuthService:
             .filter(Division.division_id == employee.division_id)
             .first()
         )
+        db_route = db.query(Route).filter(Route.route_id == employee.routes_id).first()
 
         role_name = db_role.role_name if db_role else ""
         position_name = db_position.position_name if db_position else ""
         prefix_name = db_prefix.prefix_name if db_prefix else ""
         department_name = db_dept.department_name if db_dept else ""
         division_name = db_division.division_name if db_division else ""
+        route_name = db_route.route_name if db_route else ""
 
         return {
             "employee": {
@@ -236,12 +226,14 @@ class EmployeeAuthService:
                 "last_name": employee.last_name,
                 "role_name": role_name,
                 "name_prefix": prefix_name,
+                "position_id": employee.position_id,
                 "position_name": position_name,
                 "department_id": employee.department_id,
                 "department_name": department_name,
                 "division_id": employee.division_id,
                 "division_name": division_name,
-                "position_id": employee.position_id,
+                "route_id": employee.routes_id,
+                "route_name": route_name,
             },
             "message": "Login successful",
         }

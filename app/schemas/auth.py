@@ -21,9 +21,9 @@ class EmployeeRegister(BaseModel):
     role_id: int
     name_prefix_id: int
     field_id: int
+    position_id: int
     department_id: int
     division_id: int
-    position_id: int
     shift_id: int
 
     # Optional foreign keys
@@ -44,10 +44,10 @@ class EmployeeResponse(BaseModel):
     email: Optional[str]
     first_name: str
     last_name: str
-    is_active: bool
     role_id: int
-    department_id: int
     position_id: int
+    department_id: int
+    is_active: bool
 
 
 class EmployeeLogin(BaseModel):
@@ -66,12 +66,14 @@ class EmployeeInfo(BaseModel):
     last_name: str
     role_name: str
     name_prefix: str
+    position_id: Optional[int] = None
+    position_name: str
     department_id: Optional[int] = None
     department_name: Optional[str] = None
     division_id: Optional[int] = None
     division_name: Optional[str] = None
-    position_name: str
-    position_id: Optional[int] = None
+    route_id: Optional[int] = None
+    route_name: Optional[str] = None
 
 
 class LoginResponse(BaseModel):
