@@ -53,11 +53,32 @@ async def employee_register(
 
 
 @router.post("/login", response_model=LoginResponse)
-async def employee_login(credentials: EmployeeLogin, db: Session = Depends(get_db)):
+async def employee_login(
+    credentials: EmployeeLogin,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
     """Authenticate and login. Audit logged in service layer."""
+    submitted_employee_code = credentials.employee_code
+    employee = (
+        db.query(Employee)
+        .filter(Employee.employee_code == submitted_employee_code)
+        .first()
+    )
+    employee_name = (
+        employee_auth_service.get_employee_display_name(employee)
+        if employee
+        else submitted_employee_code
+    )
+    set_audit_context(
+        request=http_request,
+        user_name=employee_name,
+        employee_code=submitted_employee_code,
+    )
+
     employee = employee_auth_service.authenticate_employee(
         db=db,
-        employee_code=credentials.employee_code,
+        employee_code=submitted_employee_code,
         password=credentials.password,
     )
     return employee_auth_service.build_login_response(db=db, employee=employee)

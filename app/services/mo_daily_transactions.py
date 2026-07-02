@@ -7,6 +7,16 @@ from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.core.audit_logger import audit_logger
+from app.core.registries import (
+    MO_REPORT_APPROVED,
+    MO_REPORT_CREATED,
+    MO_REPORT_DELETED,
+    MO_REPORT_NOT_FOUND,
+    MO_REPORT_REJECTED,
+    MO_REPORT_UPDATE_DENIED,
+    MO_REPORT_UPDATED,
+)
 from app.models.employees import Employee
 from app.models.mo_daily_transaction_details import MoDailyTransactionDetail1
 from app.models.mo_daily_transaction_project import MoDailyTransactionProject
@@ -107,6 +117,13 @@ class MoDailyTransactionService:
         return position is not None and "admin" in position.strip().lower()
 
     @staticmethod
+    def _can_approve(actor: Employee, db: Session) -> bool:
+        """Mirror frontend approval authority: director-level positions plus admins."""
+        return actor.position_id in {1, 5} or MoDailyTransactionService._is_admin(
+            actor, db
+        )
+
+    @staticmethod
     def _enforce_same_department(
         actor: Employee, department_id: Optional[int], db: Session
     ) -> None:
@@ -127,6 +144,32 @@ class MoDailyTransactionService:
     def _normalize_flat(data: dict) -> dict:
         """Return a mutable copy of data."""
         return dict(data)
+
+    @staticmethod
+    def _format_audit_value(value) -> str:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        if value is None:
+            return "null"
+        return repr(value)
+
+    @staticmethod
+    def _format_audit_changes(
+        old_data: dict, new_data: dict, changed_fields: set[str]
+    ) -> str:
+        changes = []
+        for field in sorted(changed_fields):
+            old_value = old_data.get(field)
+            new_value = new_data.get(field)
+            if old_value != new_value:
+                changes.append(
+                    f"{field}: "
+                    f"{MoDailyTransactionService._format_audit_value(old_value)} -> "
+                    f"{MoDailyTransactionService._format_audit_value(new_value)}"
+                )
+        return "; ".join(changes) if changes else "no changes"
 
     @staticmethod
     def _build_response(txn: MoDailyTransaction, db: Session) -> dict:
@@ -435,6 +478,14 @@ class MoDailyTransactionService:
         )
         db.commit()
 
+        audit_logger.log(
+            action=MO_REPORT_CREATED.format(
+                report_id=txn.mo_daily_transaction_id,
+                department_id=txn.department_id,
+                division_id=txn.division_id,
+            )
+        )
+
         return MoDailyTransactionService._build_response(txn, db)
 
     @staticmethod
@@ -454,6 +505,13 @@ class MoDailyTransactionService:
             .first()
         )
         if not txn:
+            audit_logger.log(
+                action=MO_REPORT_NOT_FOUND.format(
+                    report_id=mo_daily_transaction_id,
+                    actor=actor_employee.employee_code,
+                    operation="get",
+                )
+            )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="ขออภัย รายการนี้ถูกลบไปแล้วโดยผู้สร้างหรือผู้อำนวยการ",
@@ -485,18 +543,56 @@ class MoDailyTransactionService:
             .first()
         )
         if not txn:
+            audit_logger.log(
+                action=MO_REPORT_NOT_FOUND.format(
+                    report_id=mo_daily_transaction_id,
+                    actor=actor_employee.employee_code,
+                    operation="update",
+                )
+            )
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="ขออภัย รายการนี้ถูกลบไปแล้วโดยผู้สร้างหรือผู้อำนวยการ",
             )
         MoDailyTransactionService._enforce_same_department(
             actor_employee, txn.department_id, db
         )
 
+        old_data = MoDailyTransactionService._build_response(txn, db)
+        old_status = old_data.get("approved_status")
+        requested_status = data.get("approved_status")
+        status_changed = requested_status is not None and requested_status != old_status
+        actor_can_approve = MoDailyTransactionService._can_approve(actor_employee, db)
+
+        if (
+            status_changed
+            and requested_status
+            in {
+                ApprovedStatusEnum.APPROVED.value,
+                ApprovedStatusEnum.REJECTED.value,
+            }
+            and not actor_can_approve
+        ):
+            audit_logger.log(
+                action=MO_REPORT_UPDATE_DENIED.format(
+                    report_id=txn.mo_daily_transaction_id,
+                    actor=actor_employee.employee_code,
+                    requested_status=requested_status,
+                    reason="actor lacks approval permission",
+                )
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="รายงานนี้ได้รับการอนุมัติแล้ว ไม่สามารถแก้ไขได้",
+            )
+
         # ── Prevent edits on already-approved reports, but allow Send Back ──
         if txn.approved_status == ApprovedStatusEnum.APPROVED:
-            new_status = data.get("approved_status")
-            # Allow Send Back (APPROVED → REJECTED)
-            if new_status != ApprovedStatusEnum.REJECTED.value:
+            # Allow Send Back (APPROVED → REJECTED) only for approval-level users.
+            if (
+                requested_status != ApprovedStatusEnum.REJECTED.value
+                or not actor_can_approve
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=("รายงานนี้ได้รับการอนุมัติแล้ว ไม่สามารถแก้ไขได้ "),
@@ -504,19 +600,22 @@ class MoDailyTransactionService:
         # ────────────────────────────────────────────────────────────────────
 
         # Update main transaction fields
-        for field in ("division_id", "division_name", "approved_by", "approved_remark"):
+        for field in ("division_id", "division_name", "approved_remark"):
             if field in data:
                 setattr(txn, field, data[field])
+
         if "approved_status" in data:
             txn.approved_status = data["approved_status"]
-        if data.get("approved_status") in {
-            ApprovedStatusEnum.APPROVED.value,
-            ApprovedStatusEnum.REJECTED.value,
-        }:
-            if not txn.approved_by:
-                txn.approved_by = actor_employee.employee_code
-            if not txn.approved_at:
-                txn.approved_at = func.now()
+
+        # Approval ownership is controlled by status transitions, not normal edits.
+        # updated_by below records the employee who changed ordinary report content.
+        if status_changed and requested_status == ApprovedStatusEnum.APPROVED.value:
+            txn.approved_by = actor_employee.employee_code
+            txn.approved_at = func.now()
+        elif status_changed and requested_status == ApprovedStatusEnum.PENDING.value:
+            txn.approved_by = None
+            txn.approved_at = None
+
         txn.updated_by = actor_employee.employee_code
         txn.updated_at = func.now()
 
@@ -542,7 +641,41 @@ class MoDailyTransactionService:
         db.commit()
         db.refresh(txn)
 
-        return MoDailyTransactionService._build_response(txn, db)
+        new_data = MoDailyTransactionService._build_response(txn, db)
+        changed_fields = set(data.keys())
+        changes_text = MoDailyTransactionService._format_audit_changes(
+            old_data, new_data, changed_fields
+        )
+        new_status = new_data.get("approved_status")
+
+        if old_status != new_status and new_status == ApprovedStatusEnum.APPROVED.value:
+            audit_logger.log(
+                action=MO_REPORT_APPROVED.format(
+                    report_id=txn.mo_daily_transaction_id,
+                    old_status=old_status,
+                    new_status=new_status,
+                )
+            )
+        elif (
+            old_status != new_status and new_status == ApprovedStatusEnum.REJECTED.value
+        ):
+            audit_logger.log(
+                action=MO_REPORT_REJECTED.format(
+                    report_id=txn.mo_daily_transaction_id,
+                    old_status=old_status,
+                    new_status=new_status,
+                    remark=new_data.get("approved_remark") or "",
+                )
+            )
+        else:
+            audit_logger.log(
+                action=MO_REPORT_UPDATED.format(
+                    report_id=txn.mo_daily_transaction_id,
+                    changes=changes_text,
+                )
+            )
+
+        return new_data
 
     @staticmethod
     def delete_report(
@@ -569,6 +702,10 @@ class MoDailyTransactionService:
             actor_employee, txn.department_id, db
         )
 
+        deleted_report_id = txn.mo_daily_transaction_id
+        deleted_department_id = txn.department_id
+        deleted_division_id = txn.division_id
+
         # CASCADE should handle details, but be explicit
         db.execute(
             delete(MoDailyTransactionDetail1).where(
@@ -590,4 +727,13 @@ class MoDailyTransactionService:
         )
         db.delete(txn)
         db.commit()
+
+        audit_logger.log(
+            action=MO_REPORT_DELETED.format(
+                report_id=deleted_report_id,
+                department_id=deleted_department_id,
+                division_id=deleted_division_id,
+            )
+        )
+
         return {"message": "Report deleted successfully"}

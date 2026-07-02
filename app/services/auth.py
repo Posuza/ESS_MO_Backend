@@ -22,6 +22,7 @@ from app.core.registries import (
     FORGOT_PASSWORD_EMAIL_SENT,
     FORGOT_PASSWORD_FAILED,
     LOGIN_ATTEMPT,
+    LOGIN_FAILED_REASON,
     LOGIN_SUCCESS,
     LOGOUT_SUCCESS,
     REGISTER,
@@ -153,6 +154,12 @@ class EmployeeAuthService:
         audit_logger.log(action=LOGIN_ATTEMPT.format(resource="Employee"))
 
         if not employee:
+            audit_logger.log(
+                action=LOGIN_FAILED_REASON.format(
+                    resource="Employee",
+                    reason="employee not found",
+                )
+            )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=AUTH_ERROR_EMPLOYEE_NOT_FOUND,
@@ -160,6 +167,12 @@ class EmployeeAuthService:
 
         # Verify password (plaintext comparison - TODO: hash when security enabled)
         if employee.password != password:
+            audit_logger.log(
+                action=LOGIN_FAILED_REASON.format(
+                    resource="Employee",
+                    reason="invalid password",
+                )
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=AUTH_ERROR_INVALID_CREDENTIALS,
@@ -167,6 +180,12 @@ class EmployeeAuthService:
 
         # Check if account is active
         if not employee.is_active:
+            audit_logger.log(
+                action=LOGIN_FAILED_REASON.format(
+                    resource="Employee",
+                    reason="account inactive",
+                )
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=AUTH_ERROR_ACCOUNT_INACTIVE,

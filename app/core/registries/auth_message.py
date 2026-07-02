@@ -60,6 +60,7 @@ AUTH_ERROR_NO_EMAIL_REGISTERED: Final[str] = (
 # =========================================================
 LOGIN_ATTEMPT: Final[str] = "{resource} Attempt to Login"
 LOGIN_FAILED: Final[str] = "{resource} Login attempt failed"
+LOGIN_FAILED_REASON: Final[str] = "{resource} Login attempt failed - {reason}"
 LOGIN_SUCCESS: Final[str] = "{resource} Login successful"
 LOGOUT_ATTEMPT: Final[str] = "{resource} Attempt to Logout"
 LOGOUT_FAILED: Final[str] = "{resource} Logout failed"
