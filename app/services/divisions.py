@@ -39,7 +39,7 @@ class DivisionService:
                 "division_id": getattr(current_employee, "division_id", None),
             },
         )
-        stmt = select(Division)
+        stmt = select(Division).where(Division.is_active)
         if department_id is not None:
             stmt = stmt.where(Division.department_id == department_id)
 

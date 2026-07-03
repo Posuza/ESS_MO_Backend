@@ -17,6 +17,8 @@ from app.core.registries import (
     MO_REPORT_UPDATE_DENIED,
     MO_REPORT_UPDATED,
 )
+from app.models.departments import Department
+from app.models.divisions import Division
 from app.models.employees import Employee
 from app.models.mo_daily_transaction_details import MoDailyTransactionDetail1
 from app.models.mo_daily_transaction_project import MoDailyTransactionProject
@@ -122,6 +124,90 @@ class MoDailyTransactionService:
         return actor.position_id in {1, 5} or MoDailyTransactionService._is_admin(
             actor, db
         )
+
+    @staticmethod
+    def _validate_department_exists(db: Session, department_id: int) -> Department:
+        """Ensure the department exists and is active. Returns the Department row."""
+        dept = (
+            db.execute(
+                select(Department).where(
+                    Department.department_id == department_id,
+                    Department.is_active,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not dept:
+            any_dept = (
+                db.execute(
+                    select(Department).where(Department.department_id == department_id)
+                )
+                .scalars()
+                .first()
+            )
+            if any_dept:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"หน่วยงาน '{any_dept.department_name}' ถูกปิดใช้งาน",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="ไม่พบหน่วยงาน หรือถูกปิดใช้งาน",
+            )
+        return dept
+
+    @staticmethod
+    def _validate_division_belongs_to_department(
+        db: Session, division_id: int, department_id: int
+    ) -> Division | None:
+        """Ensure the division exists, is active, and belongs to the given department.
+
+        A ``division_id`` of ``0`` (meaning "no specific division") is allowed
+        and returns ``None`` without raising.
+        """
+        if division_id == 0:
+            return None
+        div = (
+            db.execute(
+                select(Division).where(
+                    Division.division_id == division_id,
+                    Division.department_id == department_id,
+                    Division.is_active,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not div:
+            # Try to get the division name even if inactive (for the error message)
+            any_div = (
+                db.execute(
+                    select(Division).where(
+                        Division.division_id == division_id,
+                        Division.department_id == department_id,
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            any_dept = (
+                db.execute(
+                    select(Department).where(Department.department_id == department_id)
+                )
+                .scalars()
+                .first()
+            )
+            div_name = any_div.division_name if any_div else f"id={division_id}"
+            dept_name = any_dept.department_name if any_dept else f"id={department_id}"
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    f"ไม่พบหน่วยงานย่อย '{div_name}' สำหรับหน่วยงาน '{dept_name}' "
+                    f"หรือถูกปิดใช้งาน"
+                ),
+            )
+        return div
 
     @staticmethod
     def _enforce_same_department(
@@ -422,6 +508,15 @@ class MoDailyTransactionService:
             actor_employee, data["department_id"], db
         )
 
+        # ── Validate department / division exist ──────────────────────────────
+        MoDailyTransactionService._validate_department_exists(db, data["department_id"])
+        division_id = data.get("division_id", 0)
+        if division_id != 0:
+            MoDailyTransactionService._validate_division_belongs_to_department(
+                db, division_id, data["department_id"]
+            )
+        # ──────────────────────────────────────────────────────────────────────
+
         # ── Duplicate check: same department + division for today ────────────
         today = date.today()
         existing = (
@@ -598,6 +693,15 @@ class MoDailyTransactionService:
                     detail=("รายงานนี้ได้รับการอนุมัติแล้ว ไม่สามารถแก้ไขได้ "),
                 )
         # ────────────────────────────────────────────────────────────────────
+
+        # ── Validate division if it changed ──────────────────────────────────
+        if "division_id" in data:
+            requested_div = data["division_id"]
+            if requested_div != 0:
+                MoDailyTransactionService._validate_division_belongs_to_department(
+                    db, requested_div, txn.department_id
+                )
+        # ──────────────────────────────────────────────────────────────────────
 
         # Update main transaction fields
         for field in ("division_id", "division_name", "approved_remark"):
