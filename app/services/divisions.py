@@ -30,6 +30,15 @@ class DivisionService:
         department_id: Optional[int] = None,
         current_employee: Employee | None = None,
     ) -> List[Division]:
+        print(
+            "[DivisionService.list_by_department] input:",
+            {
+                "department_id": department_id,
+                "employee_id": getattr(current_employee, "employee_id", None),
+                "position_id": getattr(current_employee, "position_id", None),
+                "division_id": getattr(current_employee, "division_id", None),
+            },
+        )
         stmt = select(Division)
         if department_id is not None:
             stmt = stmt.where(Division.department_id == department_id)
@@ -37,9 +46,26 @@ class DivisionService:
         # Apply position-based access filtering
         if current_employee is not None:
             level = _get_access_level(current_employee.position_id)
+            print(
+                "[DivisionService.list_by_department] access level:",
+                level,
+            )
             if level == _AccessLevel.DIVISION_ONLY:
                 stmt = stmt.where(Division.division_id == current_employee.division_id)
             # ALL_DEPT → no extra filter (sees all divisions in department)
 
         stmt = stmt.order_by(Division.division_name)
-        return db.execute(stmt).scalars().all()
+        rows = db.execute(stmt).scalars().all()
+        print(
+            "[DivisionService.list_by_department] returned:",
+            len(rows),
+            [
+                {
+                    "division_id": row.division_id,
+                    "division_name": row.division_name,
+                    "department_id": row.department_id,
+                }
+                for row in rows
+            ],
+        )
+        return rows
