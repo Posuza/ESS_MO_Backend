@@ -258,6 +258,17 @@ class MoDailyTransactionService:
         return div
 
     @staticmethod
+    def _validate_report_scope_is_active(
+        db: Session, txn: MoDailyTransaction
+    ) -> None:
+        """Ensure an existing report's department/division are still active."""
+        MoDailyTransactionService._validate_department_exists(db, txn.department_id)
+        if txn.division_id:
+            MoDailyTransactionService._validate_division_belongs_to_department(
+                db, txn.division_id, txn.department_id
+            )
+
+    @staticmethod
     def _enforce_same_department(
         actor: Employee, department_id: Optional[int], db: Session
     ) -> None:
@@ -762,6 +773,7 @@ class MoDailyTransactionService:
         MoDailyTransactionService._enforce_same_department(
             actor_employee, txn.department_id, db
         )
+        MoDailyTransactionService._validate_report_scope_is_active(db, txn)
 
         old_data = MoDailyTransactionService._build_response(txn, db)
         old_status = old_data.get("approved_status")
@@ -916,6 +928,7 @@ class MoDailyTransactionService:
         MoDailyTransactionService._enforce_same_department(
             actor_employee, txn.department_id, db
         )
+        MoDailyTransactionService._validate_report_scope_is_active(db, txn)
 
         deleted_report_id = txn.mo_daily_transaction_id
         deleted_department_id = txn.department_id
