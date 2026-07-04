@@ -119,8 +119,56 @@ class MoDailyTransactionService:
         return position is not None and "admin" in position.strip().lower()
 
     @staticmethod
+    def _assert_position_guard(actor: Employee, db: Session) -> None:
+        """Enforce that the actor's Position record is active.
+
+        Raises 403 if the position is deactivated or not found.
+        This runs on EVERY MO endpoint (read + write).
+        """
+        position = (
+            db.execute(
+                select(Position).where(Position.position_id == actor.position_id)
+            )
+            .scalars()
+            .first()
+        )
+        if not position or not position.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="ตำแหน่งนี้ถูกปิดใช้งาน ไม่สามารถดำเนินการได้",
+            )
+
+    @staticmethod
+    def _assert_can_write(actor: Employee, db: Session) -> None:
+        """Enforce write permission based on position level.
+
+        Calls ``_assert_position_guard`` first.
+        Raises 403 if position is OWN_ONLY (3,4, unknown) — read-only staff.
+        """
+        MoDailyTransactionService._assert_position_guard(actor, db)
+
+        # Position 1,2,5,6 can write; 3,4 and unknown are read-only
+        if actor.position_id not in {1, 2, 5, 6}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="ตำแหน่งนี้ไม่มีสิทธิ์แก้ไขรายงาน",
+            )
+
+    @staticmethod
     def _can_approve(actor: Employee, db: Session) -> bool:
-        """Mirror frontend approval authority: director-level positions plus admins."""
+        """Mirror frontend approval authority: director-level positions plus admins.
+
+        Also checks position is active — deactivated positions cannot approve.
+        """
+        position = (
+            db.execute(
+                select(Position).where(Position.position_id == actor.position_id)
+            )
+            .scalars()
+            .first()
+        )
+        if not position or not position.is_active:
+            return False
         return actor.position_id in {1, 5} or MoDailyTransactionService._is_admin(
             actor, db
         )
@@ -464,6 +512,7 @@ class MoDailyTransactionService:
         status: Optional[ApprovedStatusEnum] = None,
         created_by: Optional[str] = None,
     ) -> List[dict]:
+        MoDailyTransactionService._assert_position_guard(actor_employee, db)
         if not MoDailyTransactionService._is_admin(actor_employee, db):
             if (
                 department_id is not None
@@ -503,6 +552,7 @@ class MoDailyTransactionService:
         payload: MoDailyTransactionCreate,
         actor_employee: Employee,
     ) -> dict:
+        MoDailyTransactionService._assert_can_write(actor_employee, db)
         data = MoDailyTransactionService._normalize_flat(payload.model_dump())
         MoDailyTransactionService._enforce_same_department(
             actor_employee, data["department_id"], db
@@ -589,6 +639,7 @@ class MoDailyTransactionService:
         mo_daily_transaction_id: int,
         actor_employee: Employee,
     ) -> dict:
+        MoDailyTransactionService._assert_position_guard(actor_employee, db)
         txn = (
             db.execute(
                 select(MoDailyTransaction).where(
@@ -623,6 +674,7 @@ class MoDailyTransactionService:
         payload: MoDailyTransactionUpdate,
         actor_employee: Employee,
     ) -> dict:
+        MoDailyTransactionService._assert_can_write(actor_employee, db)
         data = MoDailyTransactionService._normalize_flat(
             payload.model_dump(exclude_unset=True)
         )
@@ -787,6 +839,7 @@ class MoDailyTransactionService:
         mo_daily_transaction_id: int,
         actor_employee: Employee,
     ) -> dict:
+        MoDailyTransactionService._assert_can_write(actor_employee, db)
         txn = (
             db.execute(
                 select(MoDailyTransaction).where(
@@ -841,3 +894,66 @@ class MoDailyTransactionService:
         )
 
         return {"message": "Report deleted successfully"}
+
+    # ─── Position Status ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def check_employee_position_active(actor_employee: Employee, db: Session) -> dict:
+        """
+        Check whether the employee's position is active.
+        Returns fresh employee scope data plus position active state.
+        Fresh DB check — does not rely on cached auth data.
+        """
+        employee = (
+            db.execute(
+                select(Employee).where(
+                    Employee.employee_code == actor_employee.employee_code
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not employee:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Employee not found",
+            )
+
+        position = (
+            db.execute(
+                select(Position).where(Position.position_id == employee.position_id)
+            )
+            .scalars()
+            .first()
+        )
+        department = (
+            db.execute(
+                select(Department).where(
+                    Department.department_id == employee.department_id
+                )
+            )
+            .scalars()
+            .first()
+        )
+        division = (
+            db.execute(
+                select(Division).where(Division.division_id == employee.division_id)
+            )
+            .scalars()
+            .first()
+        )
+        position_is_active = bool(position and position.is_active)
+
+        return {
+            "employee_code": employee.employee_code,
+            "employee_is_active": bool(employee.is_active),
+            "position_id": employee.position_id,
+            "position_name": position.position_name if position else None,
+            "position_is_active": position_is_active,
+            "department_id": employee.department_id,
+            "department_name": department.department_name if department else None,
+            "department_is_active": bool(department and department.is_active),
+            "division_id": employee.division_id,
+            "division_name": division.division_name if division else None,
+            "division_is_active": bool(division and division.is_active),
+        }

@@ -45,6 +45,24 @@ async def api_list_reports(
     )
 
 
+@router.get("/employee-position-active")
+@active_employee_required
+async def api_check_employee_position_active(
+    http_request: Request,
+    current_employee: Employee = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Check if the authenticated employee's position is active.
+    Returns ``{"position_id": ..., "is_active": true|false}``.
+    This is a fresh DB query — does NOT rely on cached login data.
+    """
+    return MoDailyTransactionService.check_employee_position_active(
+        actor_employee=current_employee,
+        db=db,
+    )
+
+
 @router.post(
     "/",
     response_model=MoDailyTransactionResponse,
