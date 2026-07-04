@@ -63,6 +63,21 @@ async def api_check_employee_position_active(
     )
 
 
+@router.get("/available-report-divisions")
+@active_employee_required
+async def api_list_available_report_divisions(
+    http_request: Request,
+    department_id: int = Query(...),
+    current_employee: Employee = None,
+    db: Session = Depends(get_db),
+):
+    return MoDailyTransactionService.list_available_report_divisions(
+        db=db,
+        actor_employee=current_employee,
+        department_id=department_id,
+    )
+
+
 @router.post(
     "/",
     response_model=MoDailyTransactionResponse,

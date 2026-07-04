@@ -547,6 +547,64 @@ class MoDailyTransactionService:
         return [MoDailyTransactionService._build_response(r, db) for r in rows]
 
     @staticmethod
+    def list_available_report_divisions(
+        db: Session,
+        actor_employee: Employee,
+        department_id: int,
+    ) -> List[dict]:
+        """Return active divisions that do not already have today's report.
+
+        Used by Add New so the frontend does not have to merge all divisions with
+        today's reports itself. Inactive department/division rows resolve to an
+        empty list for selection purposes.
+        """
+        MoDailyTransactionService._assert_position_guard(actor_employee, db)
+        MoDailyTransactionService._enforce_same_department(
+            actor_employee, department_id, db
+        )
+
+        department = (
+            db.execute(
+                select(Department).where(
+                    Department.department_id == department_id,
+                    Department.is_active,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not department:
+            return []
+
+        reported_today = (
+            select(MoDailyTransaction.division_id)
+            .where(
+                MoDailyTransaction.department_id == department_id,
+                func.date(MoDailyTransaction.created_at) == date.today(),
+                MoDailyTransaction.division_id.is_not(None),
+            )
+        )
+
+        stmt = select(Division).where(
+            Division.department_id == department_id,
+            Division.is_active,
+            Division.division_id.not_in(reported_today),
+        )
+
+        if actor_employee.position_id not in {1, 5}:
+            stmt = stmt.where(Division.division_id == actor_employee.division_id)
+
+        rows = db.execute(stmt.order_by(Division.division_name)).scalars().all()
+        return [
+            {
+                "division_id": row.division_id,
+                "division_name": row.division_name,
+                "department_id": row.department_id,
+            }
+            for row in rows
+        ]
+
+    @staticmethod
     def create_report(
         db: Session,
         payload: MoDailyTransactionCreate,
