@@ -68,7 +68,8 @@ class MoDailyTransactionCreate(BaseModel):
     # Detail 1 — อบรม
     training_shift_change_count: int = 0
     training_planned_count: int = 0
-    training_duty_control_count: int = 0
+    training_supervise_onsite_count: int = 0
+    training_supervise_virtual_simulation_count: int = 0
 
     # Detail 2 — projects/meetings
     projects: List[SectorReportProject] = []
@@ -115,7 +116,8 @@ class MoDailyTransactionUpdate(BaseModel):
 
     training_shift_change_count: Optional[int] = None
     training_planned_count: Optional[int] = None
-    training_duty_control_count: Optional[int] = None
+    training_supervise_onsite_count: Optional[int] = None
+    training_supervise_virtual_simulation_count: Optional[int] = None
 
     projects: Optional[List[SectorReportProject]] = None
 
@@ -170,7 +172,8 @@ class MoDailyTransactionResponse(BaseModel):
     shift_36_count: int = 0
     training_shift_change_count: int = 0
     training_planned_count: int = 0
-    training_duty_control_count: int = 0
+    training_supervise_onsite_count: int = 0
+    training_supervise_virtual_simulation_count: int = 0
 
     # Detail 2 — projects
     projects: List[SectorReportProject] = []

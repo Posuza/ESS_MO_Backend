@@ -73,8 +73,8 @@ DETAIL_1_COLUMNS = [
     # training
     "training_shift_change_count",
     "training_planned_count",
-    "training_duty_control_count",
-    "training_extra_1",
+    "training_supervise_onsite_count",
+    "training_supervise_virtual_simulation_count",
     "training_extra_2",
     "training_extra_3",
     "training_extra_4",
@@ -465,9 +465,10 @@ class MoDailyTransactionService:
             elif not isinstance(disc_data, dict):
                 disc_data = dict(disc_data)
 
-            # Auto-generate key if null, empty, or starts with "discipline_custom_" or "auto_gen"
+            # Auto-generate key only if null/empty or starts with "auto_gen"
+            # Existing "discipline_custom_N" keys are kept as-is (already assigned)
             raw_key = str(disc_data.get("key", "") or "")
-            if not raw_key or raw_key.startswith(("discipline_custom_", "auto_gen")):
+            if not raw_key or raw_key.startswith("auto_gen"):
                 next_custom_id += 1
                 raw_key = f"discipline_custom_{next_custom_id}"
 

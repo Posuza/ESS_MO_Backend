@@ -134,11 +134,11 @@ class MoDailyTransactionDetail1(Base):
     training_planned_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, comment="ฝึกตามแผน"
     )
-    training_duty_control_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="ฝึกควบคุมหน้าที่"
+    training_supervise_onsite_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, comment="4.3 ควบคุมหน้างาน"
     )
-    training_extra_1: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="Extra training field 1"
+    training_supervise_virtual_simulation_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, comment="4.4 จำลองสถานการณ์เสมือนจริง"
     )
     training_extra_2: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, comment="Extra training field 2"
