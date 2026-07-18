@@ -26,7 +26,7 @@ from app.core.registries import (
 _logger = logging.getLogger(__name__)
 
 
-def _is_db_port_open(timeout: float = 0.3) -> bool:
+def _is_db_port_open(timeout: float = 1.0) -> bool:
     """Quick check to see if the database is reachable.
 
     - For SQLite: always returns True (local file, no server)
