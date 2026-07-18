@@ -594,8 +594,7 @@ class MoDailyTransactionService:
             stmt = stmt.where(MoDailyTransaction.approved_status == status)
         if created_by:
             stmt = stmt.where(MoDailyTransaction.created_by == created_by)
-        stmt = stmt.order_by(MoDailyTransaction.created_at.desc())
-
+        stmt = stmt.order_by(MoDailyTransaction.division_id.asc())
         rows = db.execute(stmt).scalars().all()
         return [MoDailyTransactionService._build_response(r, db) for r in rows]
 
