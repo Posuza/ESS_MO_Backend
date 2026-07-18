@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import HTTPException, Request, status
 from sqlalchemy.exc import (
     DatabaseError,
@@ -20,6 +22,8 @@ from app.core.registries import (
     DATABASE_ERROR_QUERY_ERROR,
 )
 
+_logger = logging.getLogger(__name__)
+
 
 class DatabaseErrorMiddleware(BaseHTTPMiddleware):
     """
@@ -37,6 +41,7 @@ class DatabaseErrorMiddleware(BaseHTTPMiddleware):
         except (OperationalError, InterfaceError, DBAPIError, DatabaseError) as e:
             # Database connection errors, timeouts, host blocked
             error_msg = str(e).lower()
+            _logger.exception("Database DBAPI error during request: %s", e)
 
             # Check if it's a timeout
             if "timeout" in error_msg or "timed out" in error_msg:

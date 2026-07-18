@@ -15,11 +15,22 @@ class SectorReportDiscipline(BaseModel):
 
 
 class SectorReportProject(BaseModel):
-    """A single meeting/project item (stored in transaction_projects)."""
+    """group3 — เข้าพบผู้ว่าจ้าง (status: normal/warning/danger)."""
 
     name: str = ""
     detail: str = ""
     status: str = "normal"
+    note: str = ""
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class GuardPostMovement(BaseModel):
+    """group4 — การเปลี่ยนแปลงจุดรักษาการณ์ (status: Thai text or custom)."""
+
+    name: str = ""
+    detail: str = ""
+    status: str = ""
     note: str = ""
 
     model_config = ConfigDict(extra="ignore")
@@ -74,6 +85,9 @@ class MoDailyTransactionCreate(BaseModel):
     # Detail 2 — projects/meetings
     projects: List[SectorReportProject] = []
 
+    # Detail 2 — guard post movements
+    guard_post_movements: List[GuardPostMovement] = []
+
     # Dynamic disciplines/warnings
     disciplines: List[SectorReportDiscipline] = []
 
@@ -120,6 +134,8 @@ class MoDailyTransactionUpdate(BaseModel):
     training_supervise_virtual_simulation_count: Optional[int] = None
 
     projects: Optional[List[SectorReportProject]] = None
+
+    guard_post_movements: Optional[List[GuardPostMovement]] = None
 
     # Dynamic disciplines/warnings
     disciplines: Optional[List[SectorReportDiscipline]] = None
@@ -178,7 +194,16 @@ class MoDailyTransactionResponse(BaseModel):
     # Detail 2 — projects
     projects: List[SectorReportProject] = []
 
+    # Detail 2 — guard post movements
+    guard_post_movements: List[GuardPostMovement] = []
+
     # Dynamic disciplines/warnings
     disciplines: List[SectorReportDiscipline] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class GuardPostStatusResponse(BaseModel):
+    """Simple list of distinct guard post movement statuses."""
+
+    statuses: List[str]

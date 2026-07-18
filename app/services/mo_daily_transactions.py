@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import List, Optional
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status as http_status
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -134,7 +134,7 @@ class MoDailyTransactionService:
         )
         if not position or not position.is_active:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
+                status_code=http_status.HTTP_403_FORBIDDEN,
                 detail="ตำแหน่งนี้ถูกปิดใช้งาน ไม่สามารถดำเนินการได้",
             )
 
@@ -150,7 +150,7 @@ class MoDailyTransactionService:
         # Position 1,2,5,6 can write; 3,4 and unknown are read-only
         if actor.position_id not in {1, 2, 5, 6}:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
+                status_code=http_status.HTTP_403_FORBIDDEN,
                 detail="ตำแหน่งนี้ไม่มีสิทธิ์แก้ไขรายงาน",
             )
 
@@ -196,11 +196,11 @@ class MoDailyTransactionService:
             )
             if any_dept:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
+                    status_code=http_status.HTTP_404_NOT_FOUND,
                     detail=f"หน่วยงาน '{any_dept.department_name}' ถูกปิดใช้งาน",
                 )
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=http_status.HTTP_404_NOT_FOUND,
                 detail="ไม่พบหน่วยงาน หรือถูกปิดใช้งาน",
             )
         return dept
@@ -249,7 +249,7 @@ class MoDailyTransactionService:
             div_name = any_div.division_name if any_div else f"id={division_id}"
             dept_name = any_dept.department_name if any_dept else f"id={department_id}"
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=http_status.HTTP_404_NOT_FOUND,
                 detail=(
                     f"ไม่พบหน่วยงานย่อย '{div_name}' สำหรับหน่วยงาน '{dept_name}' "
                     f"หรือถูกปิดใช้งาน"
@@ -258,9 +258,7 @@ class MoDailyTransactionService:
         return div
 
     @staticmethod
-    def _validate_report_scope_is_active(
-        db: Session, txn: MoDailyTransaction
-    ) -> None:
+    def _validate_report_scope_is_active(db: Session, txn: MoDailyTransaction) -> None:
         """Ensure an existing report's department/division are still active."""
         MoDailyTransactionService._validate_department_exists(db, txn.department_id)
         if txn.division_id:
@@ -276,12 +274,12 @@ class MoDailyTransactionService:
             return
         if department_id is None:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
+                status_code=http_status.HTTP_403_FORBIDDEN,
                 detail="Department is required",
             )
         if actor.department_id != department_id:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
+                status_code=http_status.HTTP_403_FORBIDDEN,
                 detail="You can only access reports in your own department",
             )
 
@@ -401,16 +399,20 @@ class MoDailyTransactionService:
         )
 
         projects = []
+        guard_post_movements = []
         for row in project_rows:
-            projects.append(
-                {
-                    "name": row.project_name,
-                    "detail": row.detail or "",
-                    "status": row.status or "normal",
-                    "note": row.note or "",
-                }
-            )
+            item = {
+                "name": row.project_name,
+                "detail": row.detail or "",
+                "status": row.status or "",
+                "note": row.note or "",
+            }
+            if row.status in ("normal", "warning", "danger"):
+                projects.append(item)
+            else:
+                guard_post_movements.append(item)
         data["projects"] = projects
+        data["guard_post_movements"] = guard_post_movements
 
         return data
 
@@ -452,6 +454,19 @@ class MoDailyTransactionService:
 
     @staticmethod
     def _replace_disciplines(db: Session, txn_id: int, payload: dict) -> None:
+        existing_keys_by_label = {
+            str(label).strip(): key
+            for key, label in db.execute(
+                select(
+                    MoTransactionDisciplineWarning.key,
+                    MoTransactionDisciplineWarning.label,
+                ).where(
+                    MoTransactionDisciplineWarning.key.like("discipline_custom_%")
+                )
+            ).all()
+            if key and label and str(label).strip()
+        }
+
         db.execute(
             delete(MoTransactionDisciplineWarning).where(
                 MoTransactionDisciplineWarning.mo_daily_transaction_id == txn_id
@@ -465,18 +480,27 @@ class MoDailyTransactionService:
             elif not isinstance(disc_data, dict):
                 disc_data = dict(disc_data)
 
-            # Auto-generate key only if null/empty or starts with "auto_gen"
-            # Existing "discipline_custom_N" keys are kept as-is (already assigned)
+            # Auto-generate key only if null/empty or starts with "auto_gen".
+            # Existing "discipline_custom_N" keys are kept as-is. If the same
+            # custom label already exists, reuse its key instead of making a new one.
             raw_key = str(disc_data.get("key", "") or "")
+            label = str(disc_data.get("label", "") or "")
+            normalized_label = label.strip()
             if not raw_key or raw_key.startswith("auto_gen"):
-                next_custom_id += 1
-                raw_key = f"discipline_custom_{next_custom_id}"
+                existing_key = existing_keys_by_label.get(normalized_label)
+                if existing_key:
+                    raw_key = existing_key
+                else:
+                    next_custom_id += 1
+                    raw_key = f"discipline_custom_{next_custom_id}"
+                    if normalized_label:
+                        existing_keys_by_label[normalized_label] = raw_key
 
             rows.append(
                 MoTransactionDisciplineWarning(
                     mo_daily_transaction_id=txn_id,
                     key=raw_key,
-                    label=disc_data.get("label", ""),
+                    label=label,
                     value=MoDailyTransactionService._as_int(disc_data.get("value")),
                 )
             )
@@ -492,7 +516,7 @@ class MoDailyTransactionService:
         rows = []
         sort_order = 1
 
-        # Projects/meetings
+        # Projects/meetings (group3 — เข้าพบผู้ว่าจ้าง)
         for project_data in payload.get("projects") or []:
             if hasattr(project_data, "model_dump"):
                 project_data = project_data.model_dump()
@@ -505,6 +529,23 @@ class MoDailyTransactionService:
                     detail=project_data.get("detail", ""),
                     status=project_data.get("status", "normal"),
                     note=project_data.get("note", ""),
+                )
+            )
+            sort_order += 1
+
+        # Guard post movements (group4 — การเปลี่ยนแปลงจุดรักษาการณ์)
+        for gp_item in payload.get("guard_post_movements") or []:
+            if hasattr(gp_item, "model_dump"):
+                gp_item = gp_item.model_dump()
+            elif not isinstance(gp_item, dict):
+                gp_item = dict(gp_item)
+            rows.append(
+                MoDailyTransactionProject(
+                    mo_daily_transaction_id=txn_id,
+                    project_name=gp_item.get("name", ""),
+                    detail=gp_item.get("detail", ""),
+                    status=gp_item.get("status", ""),
+                    note=gp_item.get("note", ""),
                 )
             )
             sort_order += 1
@@ -531,7 +572,7 @@ class MoDailyTransactionService:
                 and department_id != actor_employee.department_id
             ):
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
+                    status_code=http_status.HTTP_403_FORBIDDEN,
                     detail="You can only list reports in your own department",
                 )
             department_id = actor_employee.department_id
@@ -588,13 +629,10 @@ class MoDailyTransactionService:
         if not department:
             return []
 
-        reported_today = (
-            select(MoDailyTransaction.division_id)
-            .where(
-                MoDailyTransaction.department_id == department_id,
-                func.date(MoDailyTransaction.created_at) == date.today(),
-                MoDailyTransaction.division_id.is_not(None),
-            )
+        reported_today = select(MoDailyTransaction.division_id).where(
+            MoDailyTransaction.department_id == department_id,
+            func.date(MoDailyTransaction.created_at) == date.today(),
+            MoDailyTransaction.division_id.is_not(None),
         )
 
         stmt = select(Division).where(
@@ -615,6 +653,31 @@ class MoDailyTransactionService:
             }
             for row in rows
         ]
+
+    @staticmethod
+    def list_distinct_guard_post_statuses(db: Session) -> list[str]:
+        """Return all distinct guard post movement statuses from existing reports.
+
+        Filters out "normal", "warning", "danger" since those belong to projects.
+        Returns a simple list of status strings, sorted alphabetically.
+        """
+        rows = (
+            db.execute(
+                select(MoDailyTransactionProject.status)
+                .where(
+                    MoDailyTransactionProject.status.notin_(
+                        ["normal", "warning", "danger"]
+                    ),
+                    MoDailyTransactionProject.status != None,
+                    MoDailyTransactionProject.status != "",
+                )
+                .distinct()
+                .order_by(MoDailyTransactionProject.status)
+            )
+            .scalars()
+            .all()
+        )
+        return list(rows)
 
     @staticmethod
     def create_report(
@@ -653,7 +716,7 @@ class MoDailyTransactionService:
 
         if existing:
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
+                status_code=http_status.HTTP_409_CONFLICT,
                 detail=("รายงานของหน่วยงานนี้ถูกสร้างไปแล้วในวันนี้ "),
             )
         # ────────────────────────────────────────────────────────────────────
@@ -679,8 +742,7 @@ class MoDailyTransactionService:
             created_by=data.get("created_by") or actor_employee.employee_code,
         )
         db.add(txn)
-        db.commit()
-        db.refresh(txn)
+        db.flush()
 
         MoDailyTransactionService._replace_detail1(
             db, txn.mo_daily_transaction_id, data
@@ -692,6 +754,7 @@ class MoDailyTransactionService:
             db, txn.mo_daily_transaction_id, data
         )
         db.commit()
+        db.refresh(txn)
 
         audit_logger.log(
             action=MO_REPORT_CREATED.format(
@@ -729,7 +792,7 @@ class MoDailyTransactionService:
                 )
             )
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=http_status.HTTP_404_NOT_FOUND,
                 detail="ขออภัย รายการนี้ถูกลบไปแล้วโดยผู้สร้างหรือผู้อำนวยการ",
             )
         MoDailyTransactionService._enforce_same_department(
@@ -768,7 +831,7 @@ class MoDailyTransactionService:
                 )
             )
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=http_status.HTTP_404_NOT_FOUND,
                 detail="ขออภัย รายการนี้ถูกลบไปแล้วโดยผู้สร้างหรือผู้อำนวยการ",
             )
         MoDailyTransactionService._enforce_same_department(
@@ -800,7 +863,7 @@ class MoDailyTransactionService:
                 )
             )
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
+                status_code=http_status.HTTP_403_FORBIDDEN,
                 detail="รายงานนี้ได้รับการอนุมัติแล้ว ไม่สามารถแก้ไขได้",
             )
 
@@ -812,7 +875,7 @@ class MoDailyTransactionService:
                 or not actor_can_approve
             ):
                 raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
+                    status_code=http_status.HTTP_409_CONFLICT,
                     detail=("รายงานนี้ได้รับการอนุมัติแล้ว ไม่สามารถแก้ไขได้ "),
                 )
         # ────────────────────────────────────────────────────────────────────
@@ -860,7 +923,7 @@ class MoDailyTransactionService:
                 db, txn.mo_daily_transaction_id, data
             )
 
-        if "projects" in data:
+        if "projects" in data or "guard_post_movements" in data:
             MoDailyTransactionService._replace_detail2(
                 db, txn.mo_daily_transaction_id, data
             )
@@ -923,7 +986,7 @@ class MoDailyTransactionService:
         )
         if not txn:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=http_status.HTTP_404_NOT_FOUND,
                 detail="ขออภัย รายการนี้ถูกลบไปแล้วโดยผู้สร้างหรือผู้อำนวยการ",
             )
         MoDailyTransactionService._enforce_same_department(
@@ -987,7 +1050,7 @@ class MoDailyTransactionService:
         )
         if not employee:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=http_status.HTTP_404_NOT_FOUND,
                 detail="Employee not found",
             )
 

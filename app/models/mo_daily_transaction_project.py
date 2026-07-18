@@ -32,10 +32,9 @@ class MoDailyTransactionProject(Base):
         Text, nullable=True, comment="Meeting/detail description"
     )
     status: Mapped[Optional[str]] = mapped_column(
-        String(20),
-        nullable=True,
-        default="normal",
-        comment="'normal' | 'warning' | 'danger'",
+        String(255),
+        nullable=False,
+        comment="group3: normal/warning/danger | group4: predefined or custom text",
     )
     note: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True, comment="Additional note"

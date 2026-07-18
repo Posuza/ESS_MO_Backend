@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import socket
+import logging
 from contextlib import contextmanager
 
 from fastapi import HTTPException, status
@@ -21,6 +22,8 @@ from app.core.registries import (
     DATABASE_ERROR_CONNECTION_FAILED,
     DATABASE_ERROR_HOST_BLOCKED,
 )
+
+_logger = logging.getLogger(__name__)
 
 
 def _is_db_port_open(timeout: float = 0.3) -> bool:
@@ -52,6 +55,8 @@ def _raise_db_error(error_msg: str = "") -> None:
         detail = DATABASE_ERROR_HOST_BLOCKED
     else:
         detail = DATABASE_ERROR_CONNECTION_FAILED
+
+    _logger.error("Database session error mapped to 503: %s", error_msg)
 
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

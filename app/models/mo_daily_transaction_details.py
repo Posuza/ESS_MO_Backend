@@ -83,7 +83,7 @@ class MoDailyTransactionDetail1(Base):
         Integer, nullable=False, default=0, comment="ลาออก"
     )
     leave_terminated_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="ถูกไล่ออก"
+        Integer, nullable=False, default=0, comment="ส่ง รปภ. คืนฝ่ายบริหารงานบุคคล"
     )
     leave_extra_1: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, comment="Extra leave field 1"

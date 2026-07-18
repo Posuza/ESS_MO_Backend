@@ -29,7 +29,7 @@ class MoTransactionDisciplineWarning(Base):
         index=True,
     )
     key: Mapped[str] = mapped_column(
-        String(30), nullable=False, comment="Item key, e.g. 'discipline_phone_count'"
+        String(255), nullable=False, comment="Item key, e.g. 'discipline_custom_1'"
     )
     label: Mapped[str] = mapped_column(
         String(255), nullable=False, comment="Display label in Thai"

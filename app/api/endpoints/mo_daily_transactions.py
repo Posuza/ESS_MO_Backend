@@ -11,6 +11,7 @@ from app.core.db.session import get_db
 from app.models.employees import Employee
 from app.models.mo_daily_transactions import ApprovedStatusEnum
 from app.schemas.mo_daily_transactions import (
+    GuardPostStatusResponse,
     MoDailyTransactionCreate,
     MoDailyTransactionResponse,
     MoDailyTransactionUpdate,
@@ -61,6 +62,24 @@ async def api_check_employee_position_active(
         actor_employee=current_employee,
         db=db,
     )
+
+
+@router.get(
+    "/distinct-guard-post-movement-statuses",
+    response_model=GuardPostStatusResponse,
+)
+@active_employee_required
+async def api_list_distinct_guard_post_statuses(
+    http_request: Request,
+    current_employee: Employee = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Return all distinct guard post movement statuses from existing reports.
+    Excludes "normal", "warning", "danger" (those are project statuses).
+    """
+    statuses = MoDailyTransactionService.list_distinct_guard_post_statuses(db=db)
+    return GuardPostStatusResponse(statuses=statuses)
 
 
 @router.get("/available-report-divisions")
