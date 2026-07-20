@@ -82,6 +82,10 @@ class MoDailyTransactionCreate(BaseModel):
     training_supervise_onsite_count: int = 0
     training_supervise_virtual_simulation_count: int = 0
 
+    # Detail 1 — เข้าพบผู้ว่าจ้าง summary
+    employer_number_count: int = 0
+    employer_problem_count: int = 0
+
     # Detail 2 — projects/meetings
     projects: List[SectorReportProject] = []
 
@@ -132,6 +136,9 @@ class MoDailyTransactionUpdate(BaseModel):
     training_planned_count: Optional[int] = None
     training_supervise_onsite_count: Optional[int] = None
     training_supervise_virtual_simulation_count: Optional[int] = None
+
+    employer_number_count: Optional[int] = None
+    employer_problem_count: Optional[int] = None
 
     projects: Optional[List[SectorReportProject]] = None
 
@@ -190,6 +197,8 @@ class MoDailyTransactionResponse(BaseModel):
     training_planned_count: int = 0
     training_supervise_onsite_count: int = 0
     training_supervise_virtual_simulation_count: int = 0
+    employer_number_count: int = 0
+    employer_problem_count: int = 0
 
     # Detail 2 — projects
     projects: List[SectorReportProject] = []

@@ -77,8 +77,9 @@ DETAIL_1_COLUMNS = [
     "training_supervise_virtual_simulation_count",
     "training_extra_2",
     "training_extra_3",
-    "training_extra_4",
-    "training_extra_5",
+    # employer visit summary
+    "employer_number_count",
+    "employer_problem_count",
 ]
 DETAIL_1_SET = set(DETAIL_1_COLUMNS)
 

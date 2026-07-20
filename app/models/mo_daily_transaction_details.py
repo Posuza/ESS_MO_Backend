@@ -146,11 +146,13 @@ class MoDailyTransactionDetail1(Base):
     training_extra_3: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, comment="Extra training field 3"
     )
-    training_extra_4: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="Extra training field 4"
+
+    # --- Prefix: employer_ (Employer Visit Summary) ---
+    employer_number_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, comment="เข้าพบผู้ว่าจ้าง"
     )
-    training_extra_5: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="Extra training field 5"
+    employer_problem_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, comment="พบปัญหา"
     )
 
     # --- Timestamps ---
