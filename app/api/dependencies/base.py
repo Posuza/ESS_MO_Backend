@@ -26,13 +26,11 @@ from sqlalchemy.orm import Session
 
 from app.core.audit_logger import audit_logger, set_audit_context
 from app.core.db.session import get_db
-from app.core.registries import (
+
+from app.core.registries.dependencies_message import (
     ACCESS_DENIED_PERMISSION,
     ACCESS_DENIED_ROLE,
     ACCOUNT_INACTIVE,
-    AUTH_ERROR_ACCOUNT_INACTIVE,
-    AUTH_ERROR_EMPLOYEE_NOT_FOUND,
-    AUTH_ERROR_FORBIDDEN,
     EMPLOYEE_NOT_FOUND,
 )
 from app.core.security.request_actor import extract_actor_employee_code
@@ -57,7 +55,7 @@ def _get_active_employee(db: Session, employee_code: str) -> Employee:
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=AUTH_ERROR_EMPLOYEE_NOT_FOUND,
+            detail="ไม่พบรหัสพนักงานในระบบ โปรดติดต่อ GutsEssCenter",
         )
 
     if not employee.is_active:
@@ -66,7 +64,7 @@ def _get_active_employee(db: Session, employee_code: str) -> Employee:
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=AUTH_ERROR_ACCOUNT_INACTIVE,
+            detail="บัญชีผู้ใช้ถูกปิดใช้งาน โปรดติดต่อ GutsEssCenter",
         )
 
     return employee
@@ -216,7 +214,7 @@ def roles_required(*allowed_roles):
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=AUTH_ERROR_FORBIDDEN,
+                    detail="ไม่สามารถเข้าถึงได้ คุณไม่มีสิทธิ์เข้าถึงข้อมูลนี้ โปรดติดต่อ GutsEssCenter",
                 )
 
             return await func(*args, **kwargs)
@@ -273,7 +271,7 @@ class permissions_required:
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=AUTH_ERROR_FORBIDDEN,
+                    detail="ไม่สามารถเข้าถึงได้ คุณไม่มีสิทธิ์เข้าถึงข้อมูลนี้ โปรดติดต่อ GutsEssCenter",
                 )
 
             return await func(*args, **kwargs)

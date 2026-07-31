@@ -44,6 +44,7 @@ class MoDailyTransactionCreate(BaseModel):
     division_id: int = 0
     division_name: str = ""
     created_by: Optional[str] = None
+    workflow_status: Optional[str] = None
     approved_by: Optional[str] = None
     approved_status: Optional[str] = None
     approved_remark: Optional[str] = None
@@ -103,6 +104,7 @@ class MoDailyTransactionUpdate(BaseModel):
 
     division_id: int = 0
     division_name: str = ""
+    workflow_status: Optional[str] = None
     approved_by: Optional[str] = None
     approved_status: Optional[str] = None
     approved_remark: Optional[str] = None
@@ -161,6 +163,7 @@ class MoDailyTransactionResponse(BaseModel):
     division_name: str = ""
     report_date: Optional[str] = None
     status: Optional[str] = None
+    workflow_status: Optional[str] = None
     approved_status: Optional[str] = None
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
@@ -208,6 +211,16 @@ class MoDailyTransactionResponse(BaseModel):
 
     # Dynamic disciplines/warnings
     disciplines: List[SectorReportDiscipline] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MoDailyTransactionWorkflowStatusResponse(BaseModel):
+    mo_daily_transaction_id: int
+    workflow_status: Optional[str] = None
+    updated_by: Optional[str] = None
+    updated_by_position_name: Optional[str] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

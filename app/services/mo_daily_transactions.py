@@ -83,6 +83,21 @@ DETAIL_1_COLUMNS = [
 ]
 DETAIL_1_SET = set(DETAIL_1_COLUMNS)
 
+WORKFLOW_WAITING = "WAITING"
+WORKFLOW_EDITING = "EDITING"
+WORKFLOW_RETURNED_TO = "RETURNED_TO"
+WORKFLOW_APPROVED = "APPROVED"
+
+RANK_MANAGER = "MANAGER"
+RANK_DIRECTOR = "DIRECTOR"
+WORKFLOW_RANKS = [RANK_MANAGER, RANK_DIRECTOR]
+POSITION_RANK_CODES = {
+    1: RANK_DIRECTOR,
+    5: RANK_DIRECTOR,
+    2: RANK_MANAGER,
+    6: RANK_MANAGER,
+}
+
 
 class MoDailyTransactionService:
     """Service layer for MO Daily Transaction operations.
@@ -120,58 +135,136 @@ class MoDailyTransactionService:
         return position is not None and "admin" in position.strip().lower()
 
     @staticmethod
-    def _assert_position_guard(actor: Employee, db: Session) -> None:
-        """Enforce that the actor's Position record is active.
-
-        Raises 403 if the position is deactivated or not found.
-        This runs on EVERY MO endpoint (read + write).
-        """
-        position = (
-            db.execute(
-                select(Position).where(Position.position_id == actor.position_id)
-            )
-            .scalars()
-            .first()
-        )
-        if not position or not position.is_active:
-            raise HTTPException(
-                status_code=http_status.HTTP_403_FORBIDDEN,
-                detail="ตำแหน่งนี้ถูกปิดใช้งาน ไม่สามารถดำเนินการได้",
-            )
-
-    @staticmethod
-    def _assert_can_write(actor: Employee, db: Session) -> None:
-        """Enforce write permission based on position level.
-
-        Calls ``_assert_position_guard`` first.
-        Raises 403 if position is OWN_ONLY (3,4, unknown) — read-only staff.
-        """
-        MoDailyTransactionService._assert_position_guard(actor, db)
-
-        # Position 1,2,5,6 can write; 3,4 and unknown are read-only
-        if actor.position_id not in {1, 2, 5, 6}:
-            raise HTTPException(
-                status_code=http_status.HTTP_403_FORBIDDEN,
-                detail="ตำแหน่งนี้ไม่มีสิทธิ์แก้ไขรายงาน",
-            )
-
-    @staticmethod
     def _can_approve(actor: Employee, db: Session) -> bool:
-        """Mirror frontend approval authority: director-level positions plus admins.
+        """Check if actor has approval authority (director-level or admin).
 
-        Also checks position is active — deactivated positions cannot approve.
+        Position active check is handled by @mo_active_required decorator.
         """
-        position = (
-            db.execute(
-                select(Position).where(Position.position_id == actor.position_id)
-            )
-            .scalars()
-            .first()
-        )
-        if not position or not position.is_active:
-            return False
         return actor.position_id in {1, 5} or MoDailyTransactionService._is_admin(
             actor, db
+        )
+
+    @staticmethod
+    def _workflow_rank(actor: Employee) -> str:
+        rank = POSITION_RANK_CODES.get(actor.position_id)
+        if not rank:
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="ตำแหน่งนี้ไม่มีสิทธิ์ดำเนินการใน workflow MO",
+            )
+        return rank
+
+    @staticmethod
+    def _make_workflow_status(rank_code: str, state: str) -> str:
+        rank = rank_code.upper()
+        state = state.upper()
+        if state == WORKFLOW_WAITING:
+            return f"WAITING_{rank}"
+        if state == WORKFLOW_EDITING:
+            return f"EDITING_{rank}"
+        if state == WORKFLOW_RETURNED_TO:
+            return f"RETURNED_TO_{rank}"
+        if state == WORKFLOW_APPROVED:
+            return f"APPROVED_{rank}"
+        return f"{state}_{rank}"
+
+    @staticmethod
+    def _workflow_rank_label(rank_code: str) -> str:
+        labels = {
+            RANK_MANAGER: "ผู้จัดการเขต",
+            RANK_DIRECTOR: "ผู้อำนวยการ",
+            "GM": "GM",
+            "CEO": "CEO",
+        }
+        return labels.get(rank_code, "ตำแหน่งอื่น")
+
+    @staticmethod
+    def _split_workflow_status(workflow_status: Optional[str]) -> tuple[str, str]:
+        value = (workflow_status or "").strip().upper()
+        prefixes = (
+            ("RETURNED_TO_", WORKFLOW_RETURNED_TO),
+            ("WAITING_", WORKFLOW_WAITING),
+            ("EDITING_", WORKFLOW_EDITING),
+            ("APPROVED_", WORKFLOW_APPROVED),
+        )
+        for prefix, state in prefixes:
+            if value.startswith(prefix):
+                return value[len(prefix):], state
+
+        # Backward compatibility for old values such as DIRECTOR_PENDING.
+        if "_" not in value:
+            return "", ""
+        rank_code, state = value.rsplit("_", 1)
+        if state == "PENDING":
+            state = WORKFLOW_WAITING
+        elif state == "REJECTED":
+            rank_code = (
+                MoDailyTransactionService._previous_workflow_rank(rank_code)
+                or rank_code
+            )
+            state = WORKFLOW_RETURNED_TO
+        return rank_code, state
+
+    @staticmethod
+    def _next_workflow_rank(rank_code: str) -> Optional[str]:
+        try:
+            index = WORKFLOW_RANKS.index(rank_code)
+        except ValueError:
+            return None
+        next_index = index + 1
+        if next_index >= len(WORKFLOW_RANKS):
+            return None
+        return WORKFLOW_RANKS[next_index]
+
+    @staticmethod
+    def _previous_workflow_rank(rank_code: str) -> Optional[str]:
+        try:
+            index = WORKFLOW_RANKS.index(rank_code)
+        except ValueError:
+            return None
+        if index <= 0:
+            return None
+        return WORKFLOW_RANKS[index - 1]
+
+    @staticmethod
+    def _initial_workflow_status(actor: Employee) -> str:
+        actor_rank = MoDailyTransactionService._workflow_rank(actor)
+        next_rank = MoDailyTransactionService._next_workflow_rank(actor_rank)
+        target_rank = next_rank or actor_rank
+        return MoDailyTransactionService._make_workflow_status(
+            target_rank, WORKFLOW_WAITING
+        )
+
+    @staticmethod
+    def _ensure_actor_owns_workflow(
+        txn: MoDailyTransaction,
+        actor_employee: Employee,
+        expected_state: str,
+    ) -> str:
+        actor_rank = MoDailyTransactionService._workflow_rank(actor_employee)
+        workflow_rank, workflow_state = MoDailyTransactionService._split_workflow_status(
+            txn.workflow_status
+        )
+        if workflow_rank != actor_rank or workflow_state != expected_state:
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="รายการนี้ยังไม่อยู่ในขั้นตอนดำเนินการของตำแหน่งคุณ",
+            )
+        return actor_rank
+
+    @staticmethod
+    def _actor_can_edit_rejected_workflow(
+        txn: MoDailyTransaction,
+        actor_employee: Employee,
+        actor_rank: str,
+        workflow_rank: str,
+        workflow_state: str,
+    ) -> bool:
+        if workflow_state != WORKFLOW_RETURNED_TO:
+            return False
+        return (
+            workflow_rank == actor_rank
+            or txn.approved_by == actor_employee.employee_code
         )
 
     @staticmethod
@@ -285,6 +378,44 @@ class MoDailyTransactionService:
             )
 
     @staticmethod
+    def _has_department_scope(actor: Employee, db: Session) -> bool:
+        return actor.position_id in {1, 5} or MoDailyTransactionService._is_admin(
+            actor, db
+        )
+
+    @staticmethod
+    def _enforce_division_scope(
+        actor: Employee, division_id: Optional[int], db: Session
+    ) -> None:
+        if MoDailyTransactionService._has_department_scope(actor, db):
+            return
+        if actor.division_id is None or division_id != actor.division_id:
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="You can only access reports in your own division",
+            )
+
+    @staticmethod
+    def _enforce_report_scope(
+        actor: Employee, txn: MoDailyTransaction, db: Session
+    ) -> None:
+        MoDailyTransactionService._enforce_same_department(actor, txn.department_id, db)
+        MoDailyTransactionService._enforce_division_scope(actor, txn.division_id, db)
+
+    @staticmethod
+    def _enforce_edit_owner_or_approver(
+        actor: Employee, txn: MoDailyTransaction, db: Session
+    ) -> None:
+        if MoDailyTransactionService._can_approve(actor, db):
+            return
+        if txn.created_by == actor.employee_code:
+            return
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="คุณสามารถแก้ไขได้เฉพาะรายงานที่คุณสร้างเองเท่านั้น",
+        )
+
+    @staticmethod
     def _normalize_flat(data: dict) -> dict:
         """Return a mutable copy of data."""
         return dict(data)
@@ -329,6 +460,7 @@ class MoDailyTransactionService:
             if txn.created_at
             else None,
             "status": txn.approved_status.value if txn.approved_status else None,
+            "workflow_status": txn.workflow_status,
             "approved_status": txn.approved_status.value
             if txn.approved_status
             else None,
@@ -566,7 +698,6 @@ class MoDailyTransactionService:
         status: Optional[ApprovedStatusEnum] = None,
         created_by: Optional[str] = None,
     ) -> List[dict]:
-        MoDailyTransactionService._assert_position_guard(actor_employee, db)
         if not MoDailyTransactionService._is_admin(actor_employee, db):
             if (
                 department_id is not None
@@ -577,6 +708,21 @@ class MoDailyTransactionService:
                     detail="You can only list reports in your own department",
                 )
             department_id = actor_employee.department_id
+
+            if not MoDailyTransactionService._has_department_scope(actor_employee, db):
+                if (
+                    division_id is not None
+                    and division_id != actor_employee.division_id
+                ):
+                    raise HTTPException(
+                        status_code=http_status.HTTP_403_FORBIDDEN,
+                        detail="You can only list reports in your own division",
+                    )
+                division_id = (
+                    actor_employee.division_id
+                    if actor_employee.division_id is not None
+                    else -1
+                )
 
         stmt = select(MoDailyTransaction)
         if department_id is not None:
@@ -611,7 +757,6 @@ class MoDailyTransactionService:
         today's reports itself. Inactive department/division rows resolve to an
         empty list for selection purposes.
         """
-        MoDailyTransactionService._assert_position_guard(actor_employee, db)
         MoDailyTransactionService._enforce_same_department(
             actor_employee, department_id, db
         )
@@ -685,7 +830,6 @@ class MoDailyTransactionService:
         payload: MoDailyTransactionCreate,
         actor_employee: Employee,
     ) -> dict:
-        MoDailyTransactionService._assert_can_write(actor_employee, db)
         data = MoDailyTransactionService._normalize_flat(payload.model_dump())
         MoDailyTransactionService._enforce_same_department(
             actor_employee, data["department_id"], db
@@ -698,6 +842,9 @@ class MoDailyTransactionService:
             MoDailyTransactionService._validate_division_belongs_to_department(
                 db, division_id, data["department_id"]
             )
+        MoDailyTransactionService._enforce_division_scope(
+            actor_employee, division_id, db
+        )
         # ──────────────────────────────────────────────────────────────────────
 
         # ── Duplicate check: same department + division for today ────────────
@@ -721,7 +868,31 @@ class MoDailyTransactionService:
             )
         # ────────────────────────────────────────────────────────────────────
 
-        if data.get("approved_status") in {
+        requested_status = data.get("approved_status")
+        actor_can_approve = MoDailyTransactionService._can_approve(actor_employee, db)
+        if (
+            requested_status
+            in {
+                ApprovedStatusEnum.APPROVED.value,
+                ApprovedStatusEnum.REJECTED.value,
+            }
+            and not actor_can_approve
+        ):
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="ตำแหน่งนี้ไม่มีสิทธิ์อนุมัติหรือปฏิเสธรายงาน",
+            )
+
+        workflow_status = MoDailyTransactionService._initial_workflow_status(
+            actor_employee
+        )
+        if requested_status == ApprovedStatusEnum.APPROVED.value:
+            workflow_status = MoDailyTransactionService._make_workflow_status(
+                MoDailyTransactionService._workflow_rank(actor_employee),
+                WORKFLOW_APPROVED,
+            )
+
+        if requested_status in {
             ApprovedStatusEnum.APPROVED.value,
             ApprovedStatusEnum.REJECTED.value,
         }:
@@ -735,6 +906,7 @@ class MoDailyTransactionService:
             department_name=data.get("department_name", ""),
             division_id=data.get("division_id"),
             division_name=data.get("division_name"),
+            workflow_status=workflow_status,
             approved_by=data.get("approved_by"),
             approved_status=data.get("approved_status") or ApprovedStatusEnum.PENDING,
             approved_at=data.get("approved_at"),
@@ -772,7 +944,6 @@ class MoDailyTransactionService:
         mo_daily_transaction_id: int,
         actor_employee: Employee,
     ) -> dict:
-        MoDailyTransactionService._assert_position_guard(actor_employee, db)
         txn = (
             db.execute(
                 select(MoDailyTransaction).where(
@@ -795,10 +966,59 @@ class MoDailyTransactionService:
                 status_code=http_status.HTTP_404_NOT_FOUND,
                 detail="ขออภัย รายการนี้ถูกลบไปแล้วโดยผู้สร้างหรือผู้อำนวยการ",
             )
-        MoDailyTransactionService._enforce_same_department(
-            actor_employee, txn.department_id, db
-        )
+        MoDailyTransactionService._enforce_report_scope(actor_employee, txn, db)
         return MoDailyTransactionService._build_response(txn, db)
+
+    @staticmethod
+    def get_workflow_status(
+        db: Session,
+        mo_daily_transaction_id: int,
+        actor_employee: Employee,
+    ) -> dict:
+        txn = (
+            db.execute(
+                select(MoDailyTransaction).where(
+                    MoDailyTransaction.mo_daily_transaction_id
+                    == mo_daily_transaction_id
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not txn:
+            audit_logger.log(
+                action=MO_REPORT_NOT_FOUND.format(
+                    report_id=mo_daily_transaction_id,
+                    actor=actor_employee.employee_code,
+                    operation="get workflow status",
+                )
+            )
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail="ขออภัย รายการนี้ถูกลบไปแล้วโดยผู้สร้างหรือผู้อำนวยการ",
+            )
+
+        MoDailyTransactionService._enforce_report_scope(actor_employee, txn, db)
+
+        updated_by_position_name = None
+        if txn.updated_by:
+            updated_by_position_name = (
+                db.execute(
+                    select(Position.position_name)
+                    .join(Employee, Employee.position_id == Position.position_id)
+                    .where(Employee.employee_code == txn.updated_by)
+                )
+                .scalars()
+                .first()
+            )
+
+        return {
+            "mo_daily_transaction_id": txn.mo_daily_transaction_id,
+            "workflow_status": txn.workflow_status,
+            "updated_by": txn.updated_by,
+            "updated_by_position_name": updated_by_position_name,
+            "updated_at": txn.updated_at,
+        }
 
     @staticmethod
     def update_report(
@@ -807,7 +1027,6 @@ class MoDailyTransactionService:
         payload: MoDailyTransactionUpdate,
         actor_employee: Employee,
     ) -> dict:
-        MoDailyTransactionService._assert_can_write(actor_employee, db)
         data = MoDailyTransactionService._normalize_flat(
             payload.model_dump(exclude_unset=True)
         )
@@ -834,16 +1053,107 @@ class MoDailyTransactionService:
                 status_code=http_status.HTTP_404_NOT_FOUND,
                 detail="ขออภัย รายการนี้ถูกลบไปแล้วโดยผู้สร้างหรือผู้อำนวยการ",
             )
-        MoDailyTransactionService._enforce_same_department(
-            actor_employee, txn.department_id, db
-        )
+        MoDailyTransactionService._enforce_report_scope(actor_employee, txn, db)
         MoDailyTransactionService._validate_report_scope_is_active(db, txn)
+
+        requested_workflow_status = data.pop("workflow_status", None)
 
         old_data = MoDailyTransactionService._build_response(txn, db)
         old_status = old_data.get("approved_status")
         requested_status = data.get("approved_status")
+
         status_changed = requested_status is not None and requested_status != old_status
         actor_can_approve = MoDailyTransactionService._can_approve(actor_employee, db)
+        actor_rank = MoDailyTransactionService._workflow_rank(actor_employee)
+        workflow_rank, workflow_state = MoDailyTransactionService._split_workflow_status(
+            txn.workflow_status
+        )
+        if workflow_state == WORKFLOW_EDITING and txn.updated_by != actor_employee.employee_code:
+            editing_rank_label = MoDailyTransactionService._workflow_rank_label(
+                workflow_rank
+            )
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail=f"รายการนี้กำลังถูกแก้ไขโดย{editing_rank_label}",
+            )
+
+        if requested_workflow_status:
+            requested_workflow_status = requested_workflow_status.upper()
+            if requested_workflow_status == (txn.workflow_status or "").upper():
+                return MoDailyTransactionService._build_response(txn, db)
+
+            requested_rank, requested_state = (
+                MoDailyTransactionService._split_workflow_status(
+                    requested_workflow_status
+                )
+            )
+            if (
+                workflow_state == WORKFLOW_EDITING
+                and txn.updated_by == actor_employee.employee_code
+                and requested_state in {WORKFLOW_WAITING, WORKFLOW_RETURNED_TO}
+            ):
+                MoDailyTransactionService._enforce_edit_owner_or_approver(
+                    actor_employee, txn, db
+                )
+                if requested_state == WORKFLOW_WAITING and not actor_can_approve:
+                    restore_rank = (
+                        MoDailyTransactionService._next_workflow_rank(actor_rank)
+                        or actor_rank
+                    )
+                    requested_workflow_status = (
+                        MoDailyTransactionService._make_workflow_status(
+                            restore_rank, WORKFLOW_WAITING
+                        )
+                    )
+                txn.workflow_status = requested_workflow_status
+                txn.updated_by = actor_employee.employee_code
+                txn.updated_at = func.now()
+                db.commit()
+                db.refresh(txn)
+                return MoDailyTransactionService._build_response(txn, db)
+            if requested_rank != actor_rank or requested_state != WORKFLOW_EDITING:
+                raise HTTPException(
+                    status_code=http_status.HTTP_403_FORBIDDEN,
+                    detail="ไม่สามารถเปลี่ยน workflow ของตำแหน่งอื่นได้",
+                )
+            can_edit_rejected = (
+                MoDailyTransactionService._actor_can_edit_rejected_workflow(
+                    txn,
+                    actor_employee,
+                    actor_rank,
+                    workflow_rank,
+                    workflow_state,
+                )
+            )
+            can_creator_pull_back_pending = (
+                workflow_state == WORKFLOW_WAITING
+                and txn.created_by == actor_employee.employee_code
+            )
+            can_approver_edit_current_step = (
+                actor_can_approve
+                and workflow_rank == actor_rank
+                and workflow_state in {WORKFLOW_WAITING, WORKFLOW_APPROVED}
+            )
+            if (
+                workflow_rank
+                and workflow_rank != actor_rank
+                and not can_edit_rejected
+                and not can_creator_pull_back_pending
+                and not can_approver_edit_current_step
+            ):
+                raise HTTPException(
+                    status_code=http_status.HTTP_403_FORBIDDEN,
+                    detail="รายการนี้ยังไม่อยู่ในขั้นตอนแก้ไขของตำแหน่งคุณ",
+                )
+            MoDailyTransactionService._enforce_edit_owner_or_approver(
+                actor_employee, txn, db
+            )
+            txn.workflow_status = requested_workflow_status
+            txn.updated_by = actor_employee.employee_code
+            txn.updated_at = func.now()
+            db.commit()
+            db.refresh(txn)
+            return MoDailyTransactionService._build_response(txn, db)
 
         if (
             status_changed
@@ -867,6 +1177,61 @@ class MoDailyTransactionService:
                 detail="รายงานนี้ได้รับการอนุมัติแล้ว ไม่สามารถแก้ไขได้",
             )
 
+        can_send_back_approved = (
+            status_changed
+            and requested_status == ApprovedStatusEnum.REJECTED.value
+            and txn.approved_status == ApprovedStatusEnum.APPROVED
+            and actor_can_approve
+            and workflow_rank == actor_rank
+            and workflow_state == WORKFLOW_APPROVED
+        )
+        if (
+            status_changed
+            and requested_status
+            in {
+                ApprovedStatusEnum.APPROVED.value,
+                ApprovedStatusEnum.REJECTED.value,
+            }
+            and not can_send_back_approved
+        ):
+            MoDailyTransactionService._ensure_actor_owns_workflow(
+                txn, actor_employee, WORKFLOW_WAITING
+            )
+
+        if status_changed and requested_status == ApprovedStatusEnum.PENDING.value:
+            can_edit_rejected = (
+                MoDailyTransactionService._actor_can_edit_rejected_workflow(
+                    txn,
+                    actor_employee,
+                    actor_rank,
+                    workflow_rank,
+                    workflow_state,
+                )
+            )
+            if workflow_rank and workflow_rank != actor_rank and not can_edit_rejected:
+                raise HTTPException(
+                    status_code=http_status.HTTP_403_FORBIDDEN,
+                    detail="รายการนี้ยังไม่อยู่ในขั้นตอนส่งกลับแก้ไขของตำแหน่งคุณ",
+                )
+            MoDailyTransactionService._enforce_edit_owner_or_approver(
+                actor_employee, txn, db
+            )
+
+        has_report_content = any(name in data for name in DETAIL_1_COLUMNS) or any(
+            name in data for name in {"disciplines", "projects", "guard_post_movements"}
+        )
+        if has_report_content and not (
+            status_changed
+            and requested_status
+            in {
+                ApprovedStatusEnum.APPROVED.value,
+                ApprovedStatusEnum.REJECTED.value,
+            }
+        ):
+            MoDailyTransactionService._enforce_edit_owner_or_approver(
+                actor_employee, txn, db
+            )
+
         # ── Prevent edits on already-approved reports, but allow Send Back ──
         if txn.approved_status == ApprovedStatusEnum.APPROVED:
             # Allow Send Back (APPROVED → REJECTED) only for approval-level users.
@@ -887,19 +1252,81 @@ class MoDailyTransactionService:
                 MoDailyTransactionService._validate_division_belongs_to_department(
                     db, requested_div, txn.department_id
                 )
+            MoDailyTransactionService._enforce_division_scope(
+                actor_employee, requested_div, db
+            )
         # ──────────────────────────────────────────────────────────────────────
 
         # Update main transaction fields
-        for field in ("division_id", "division_name", "approved_remark"):
+        for field in (
+            "division_id",
+            "division_name",
+            "approved_remark",
+        ):
             if field in data:
                 setattr(txn, field, data[field])
 
         if "approved_status" in data:
             txn.approved_status = data["approved_status"]
 
-        # Approval ownership is controlled by status transitions, not normal edits.
-        # updated_by below records the employee who changed ordinary report content.
         if status_changed and requested_status == ApprovedStatusEnum.APPROVED.value:
+            next_rank = MoDailyTransactionService._next_workflow_rank(actor_rank)
+            if next_rank:
+                txn.approved_status = ApprovedStatusEnum.PENDING
+                txn.workflow_status = MoDailyTransactionService._make_workflow_status(
+                    next_rank, WORKFLOW_WAITING
+                )
+            else:
+                txn.workflow_status = MoDailyTransactionService._make_workflow_status(
+                    actor_rank, WORKFLOW_APPROVED
+                )
+        elif status_changed and requested_status == ApprovedStatusEnum.REJECTED.value:
+            target_rank = (
+                MoDailyTransactionService._previous_workflow_rank(actor_rank)
+                or actor_rank
+            )
+            txn.workflow_status = MoDailyTransactionService._make_workflow_status(
+                target_rank, WORKFLOW_RETURNED_TO
+            )
+        elif status_changed and requested_status == ApprovedStatusEnum.PENDING.value:
+            if workflow_state == WORKFLOW_RETURNED_TO:
+                if txn.approved_by == actor_employee.employee_code:
+                    target_rank = actor_rank
+                else:
+                    target_rank = (
+                        MoDailyTransactionService._next_workflow_rank(actor_rank)
+                        or actor_rank
+                    )
+            elif workflow_state == WORKFLOW_EDITING:
+                target_rank = (
+                    actor_rank
+                    if actor_can_approve
+                    else MoDailyTransactionService._next_workflow_rank(actor_rank)
+                    or actor_rank
+                )
+            else:
+                target_rank = (
+                    MoDailyTransactionService._next_workflow_rank(actor_rank)
+                    or actor_rank
+                )
+            txn.workflow_status = MoDailyTransactionService._make_workflow_status(
+                target_rank, WORKFLOW_WAITING
+            )
+        if not status_changed and has_report_content:
+            target_rank = (
+                actor_rank
+                if actor_can_approve
+                else MoDailyTransactionService._next_workflow_rank(actor_rank)
+                or actor_rank
+            )
+            txn.workflow_status = MoDailyTransactionService._make_workflow_status(
+                target_rank, WORKFLOW_WAITING
+            )
+
+        if status_changed and requested_status == ApprovedStatusEnum.APPROVED.value:
+            txn.approved_by = actor_employee.employee_code
+            txn.approved_at = func.now()
+        elif status_changed and requested_status == ApprovedStatusEnum.REJECTED.value:
             txn.approved_by = actor_employee.employee_code
             txn.approved_at = func.now()
         elif status_changed and requested_status == ApprovedStatusEnum.PENDING.value:
@@ -973,7 +1400,6 @@ class MoDailyTransactionService:
         mo_daily_transaction_id: int,
         actor_employee: Employee,
     ) -> dict:
-        MoDailyTransactionService._assert_can_write(actor_employee, db)
         txn = (
             db.execute(
                 select(MoDailyTransaction).where(
@@ -989,10 +1415,19 @@ class MoDailyTransactionService:
                 status_code=http_status.HTTP_404_NOT_FOUND,
                 detail="ขออภัย รายการนี้ถูกลบไปแล้วโดยผู้สร้างหรือผู้อำนวยการ",
             )
-        MoDailyTransactionService._enforce_same_department(
-            actor_employee, txn.department_id, db
+        MoDailyTransactionService._enforce_report_scope(actor_employee, txn, db)
+        MoDailyTransactionService._enforce_edit_owner_or_approver(
+            actor_employee, txn, db
         )
         MoDailyTransactionService._validate_report_scope_is_active(db, txn)
+        _, workflow_state = MoDailyTransactionService._split_workflow_status(
+            txn.workflow_status
+        )
+        if workflow_state == WORKFLOW_EDITING:
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail="รายการนี้กำลังถูกแก้ไข ไม่สามารถลบได้",
+            )
 
         deleted_report_id = txn.mo_daily_transaction_id
         deleted_department_id = txn.department_id
@@ -1029,66 +1464,3 @@ class MoDailyTransactionService:
         )
 
         return {"message": "Report deleted successfully"}
-
-    # ─── Position Status ──────────────────────────────────────────────────────
-
-    @staticmethod
-    def check_employee_position_active(actor_employee: Employee, db: Session) -> dict:
-        """
-        Check whether the employee's position is active.
-        Returns fresh employee scope data plus position active state.
-        Fresh DB check — does not rely on cached auth data.
-        """
-        employee = (
-            db.execute(
-                select(Employee).where(
-                    Employee.employee_code == actor_employee.employee_code
-                )
-            )
-            .scalars()
-            .first()
-        )
-        if not employee:
-            raise HTTPException(
-                status_code=http_status.HTTP_404_NOT_FOUND,
-                detail="Employee not found",
-            )
-
-        position = (
-            db.execute(
-                select(Position).where(Position.position_id == employee.position_id)
-            )
-            .scalars()
-            .first()
-        )
-        department = (
-            db.execute(
-                select(Department).where(
-                    Department.department_id == employee.department_id
-                )
-            )
-            .scalars()
-            .first()
-        )
-        division = (
-            db.execute(
-                select(Division).where(Division.division_id == employee.division_id)
-            )
-            .scalars()
-            .first()
-        )
-        position_is_active = bool(position and position.is_active)
-
-        return {
-            "employee_code": employee.employee_code,
-            "employee_is_active": bool(employee.is_active),
-            "position_id": employee.position_id,
-            "position_name": position.position_name if position else None,
-            "position_is_active": position_is_active,
-            "department_id": employee.department_id,
-            "department_name": department.department_name if department else None,
-            "department_is_active": bool(department and department.is_active),
-            "division_id": employee.division_id,
-            "division_name": division.division_name if division else None,
-            "division_is_active": bool(division and division.is_active),
-        }

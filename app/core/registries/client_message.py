@@ -17,9 +17,6 @@ CLIENT_ERROR_METHOD_NOT_ALLOWED: Final[str] = (
     "HTTP method not supported for this endpoint. Plase contact to GutsEssCenter"
 )
 
-CLIENT_ERROR_CONFLICT: Final[str] = (
-    "Resource conflict detected (e.g., duplicate entry). Plase contact to GutsEssCenter"
-)
 
 CLIENT_ERROR_UNPROCESSABLE_ENTITY: Final[str] = (
     "Validation failed for the provided data. Plase contact to GutsEssCenter"

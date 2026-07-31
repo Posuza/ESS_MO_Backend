@@ -37,7 +37,11 @@ class MoDailyTransaction(Base):
         default="",
         comment="Snapshot of division name at creation",
     )
-
+    workflow_status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="WAITING_DIRECTOR",
+    )
     approved_by: Mapped[Optional[str]] = mapped_column(
         String(6), nullable=True, comment="Approver employee code (snapshot)"
     )

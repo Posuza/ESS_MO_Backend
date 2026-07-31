@@ -6,12 +6,11 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import active_employee_required
+from app.api.dependencies import active_employee_required, mo_active_required
 from app.core.db.session import get_db
 from app.models.employees import Employee
 from app.models.mo_daily_transactions import ApprovedStatusEnum
 from app.schemas.mo_daily_transactions import (
-    GuardPostStatusResponse,
     MoDailyTransactionCreate,
     MoDailyTransactionResponse,
     MoDailyTransactionUpdate,
@@ -23,6 +22,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[MoDailyTransactionResponse])
 @active_employee_required
+@mo_active_required
 async def api_list_reports(
     http_request: Request,
     department_id: Optional[int] = Query(None),
@@ -46,63 +46,13 @@ async def api_list_reports(
     )
 
 
-@router.get("/employee-position-active")
-@active_employee_required
-async def api_check_employee_position_active(
-    http_request: Request,
-    current_employee: Employee = None,
-    db: Session = Depends(get_db),
-):
-    """
-    Check if the authenticated employee's position is active.
-    Returns ``{"position_id": ..., "is_active": true|false}``.
-    This is a fresh DB query — does NOT rely on cached login data.
-    """
-    return MoDailyTransactionService.check_employee_position_active(
-        actor_employee=current_employee,
-        db=db,
-    )
-
-
-@router.get(
-    "/distinct-guard-post-movement-statuses",
-    response_model=GuardPostStatusResponse,
-)
-@active_employee_required
-async def api_list_distinct_guard_post_statuses(
-    http_request: Request,
-    current_employee: Employee = None,
-    db: Session = Depends(get_db),
-):
-    """
-    Return all distinct guard post movement statuses from existing reports.
-    Excludes "normal", "warning", "danger" (those are project statuses).
-    """
-    statuses = MoDailyTransactionService.list_distinct_guard_post_statuses(db=db)
-    return GuardPostStatusResponse(statuses=statuses)
-
-
-@router.get("/available-report-divisions")
-@active_employee_required
-async def api_list_available_report_divisions(
-    http_request: Request,
-    department_id: int = Query(...),
-    current_employee: Employee = None,
-    db: Session = Depends(get_db),
-):
-    return MoDailyTransactionService.list_available_report_divisions(
-        db=db,
-        actor_employee=current_employee,
-        department_id=department_id,
-    )
-
-
 @router.post(
     "/",
     response_model=MoDailyTransactionResponse,
     status_code=status.HTTP_201_CREATED,
 )
 @active_employee_required
+@mo_active_required
 async def api_create_report(
     request: MoDailyTransactionCreate,
     http_request: Request,
@@ -121,6 +71,7 @@ async def api_create_report(
     response_model=MoDailyTransactionResponse,
 )
 @active_employee_required
+@mo_active_required
 async def api_get_report(
     mo_daily_transaction_id: int,
     http_request: Request,
@@ -139,6 +90,7 @@ async def api_get_report(
     response_model=MoDailyTransactionResponse,
 )
 @active_employee_required
+@mo_active_required
 async def api_update_report(
     mo_daily_transaction_id: int,
     request: MoDailyTransactionUpdate,
@@ -156,6 +108,7 @@ async def api_update_report(
 
 @router.delete("/{mo_daily_transaction_id}", status_code=status.HTTP_200_OK)
 @active_employee_required
+@mo_active_required
 async def api_delete_report(
     mo_daily_transaction_id: int,
     http_request: Request,

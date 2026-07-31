@@ -4,6 +4,11 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from app.core.config import settings
+from app.core.registries.service.email_message import (
+    EMAIL_SEND_ATTEMPT,
+    EMAIL_SEND_SUCCESS,
+    EMAIL_SEND_FAILED,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -155,11 +160,12 @@ def send_plain_password_email(
   </body>
 </html>"""
 
+    _logger.info(EMAIL_SEND_ATTEMPT.format(resource="Forgot-password", email=to_email))
     success = _send_email(to_email, subject, text_body, html_body)
     if success:
-        _logger.info("Forgot-password email sent to %s", to_email)
+        _logger.info(EMAIL_SEND_SUCCESS.format(resource="Forgot-password", email=to_email))
     else:
-        _logger.warning("Forgot-password email FAILED for %s", to_email)
+        _logger.warning(EMAIL_SEND_FAILED.format(resource="Forgot-password", email=to_email))
     return success
 
 
@@ -231,9 +237,10 @@ def send_change_password_notification_email(
   </body>
 </html>"""
 
+    _logger.info(EMAIL_SEND_ATTEMPT.format(resource="Change-password", email=to_email))
     success = _send_email(to_email, subject, text_body, html_body)
     if success:
-        _logger.info("Change-password notification sent to %s", to_email)
+        _logger.info(EMAIL_SEND_SUCCESS.format(resource="Change-password", email=to_email))
     else:
-        _logger.warning("Change-password notification FAILED for %s", to_email)
+        _logger.warning(EMAIL_SEND_FAILED.format(resource="Change-password", email=to_email))
     return success

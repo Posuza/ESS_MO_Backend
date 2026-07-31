@@ -1,31 +1,26 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
-from fastapi import BackgroundTasks, HTTPException, status
+from fastapi import BackgroundTasks, HTTPException, Request, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.core.audit_logger import audit_logger
+from app.core.audit_logger import audit_logger, set_audit_context
 from app.core.registries import (
-    AUTH_ERROR_ACCOUNT_INACTIVE,
-    AUTH_ERROR_ACCOUNT_INACTIVE_FORGOT_PASSWORD,
-    AUTH_ERROR_EMPLOYEE_NOT_FOUND,
-    AUTH_ERROR_INVALID_CREDENTIALS,
-    AUTH_ERROR_INVALID_OLD_PASSWORD,
-    AUTH_ERROR_NO_EMAIL_REGISTERED,
     CHANGE_PASSWORD_ATTEMPT,
     CHANGE_PASSWORD_SUCCESS,
     CLIENT_ERROR_BAD_REQUEST,
-    CLIENT_ERROR_CONFLICT,
     FORGOT_PASSWORD_ATTEMPT,
-    FORGOT_PASSWORD_EMAIL_SENT,
+    EMAIL_SEND_SUCCESS,
     FORGOT_PASSWORD_FAILED,
     LOGIN_ATTEMPT,
     LOGIN_FAILED_REASON,
     LOGIN_SUCCESS,
     LOGOUT_SUCCESS,
     REGISTER,
+    REGISTER_DUPLICATE,
 )
 from app.models.departments import Department
 from app.models.divisions import Division
@@ -38,6 +33,8 @@ from app.services.email import (
     send_change_password_notification_email,
     send_plain_password_email,
 )
+
+_logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EmployeeAuthService
@@ -86,9 +83,14 @@ class EmployeeAuthService:
         )
 
         if existing:
+            audit_logger.log(
+                action=REGISTER_DUPLICATE.format(
+                    resource="Employee", field="employee_code", value=employee_code
+                ),
+            )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=CLIENT_ERROR_CONFLICT,
+                detail="รหัสนี้มีในระบบแล้ว โปรดติดต่อ GutsEssCenter",
             )
 
         # Check email uniqueness if provided
@@ -97,9 +99,14 @@ class EmployeeAuthService:
                 db.query(Employee).filter(Employee.email == email.lower()).first()
             )
             if existing_email:
+                audit_logger.log(
+                    action=REGISTER_DUPLICATE.format(
+                        resource="Employee", field="email", value=email
+                    ),
+                )
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail=CLIENT_ERROR_CONFLICT,
+                    detail="อีเมลนี้มีในระบบแล้ว โปรดติดต่อ GutsEssCenter",
                 )
 
         # Create employee
@@ -141,14 +148,30 @@ class EmployeeAuthService:
 
     @staticmethod
     def authenticate_employee(
-        db: Session, employee_code: str, password: str
+        db: Session, employee_code: str, password: str, request: Request | None = None
     ) -> Employee:
         """
         Authenticate employee by code and password.
+        Sets audit context if request is provided.
         """
         employee = (
             db.query(Employee).filter(Employee.employee_code == employee_code).first()
         )
+
+        # Set audit context with real user info (before any checks)
+        if request:
+            employee_name = (
+                f"{employee.first_name} {employee.last_name}".strip()
+                or employee.email
+                or employee_code
+                if employee
+                else employee_code
+            )
+            set_audit_context(
+                request=request,
+                user_name=employee_name,
+                employee_code=employee_code,
+            )
 
         # Audit login attempt
         audit_logger.log(action=LOGIN_ATTEMPT.format(resource="Employee"))
@@ -162,7 +185,7 @@ class EmployeeAuthService:
             )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=AUTH_ERROR_EMPLOYEE_NOT_FOUND,
+                detail="ไม่พบรหัสพนักงานในระบบ โปรดติดต่อ GutsEssCenter",
             )
 
         # Verify password (plaintext comparison - TODO: hash when security enabled)
@@ -175,7 +198,7 @@ class EmployeeAuthService:
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=AUTH_ERROR_INVALID_CREDENTIALS,
+                detail="รหัสผ่านไม่ถูกต้อง โปรดติดต่อ GutsEssCenter",
             )
 
         # Check if account is active
@@ -188,7 +211,7 @@ class EmployeeAuthService:
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=AUTH_ERROR_ACCOUNT_INACTIVE,
+                detail="บัญชีผู้ใช้ถูกปิดใช้งาน โปรดติดต่อ GutsEssCenter",
             )
 
         # Audit login success
@@ -202,7 +225,7 @@ class EmployeeAuthService:
         Record logout audit and return standard response.
         """
         audit_logger.log(action=LOGOUT_SUCCESS.format(resource="Employee"))
-        return {"message": "Successfully logged out", "tokens_revoked": 0}
+        return {"message": "ออกจากระบบสำเร็จ", "tokens_revoked": 0}
 
     @staticmethod
     def build_login_response(db: Session, employee: Employee) -> dict:
@@ -254,7 +277,7 @@ class EmployeeAuthService:
                 "route_id": employee.routes_id,
                 "route_name": route_name,
             },
-            "message": "Login successful",
+            "message": "เข้าสู่ระบบสำเร็จ",
         }
 
     @staticmethod
@@ -280,17 +303,6 @@ class PasswordService:
         send_plain_password: bool,
         background_tasks: BackgroundTasks,
     ) -> dict:
-        """
-        Process forgot-password request.
-
-        Audits:
-          - FORGOT_PASSWORD_ATTEMPT
-          - FORGOT_PASSWORD_FAILED (with reason)
-          - FORGOT_PASSWORD_EMAIL_SENT
-
-        Raises:
-            HTTPException: With appropriate auth error code
-        """
         # Look up employee
         employee = db.execute(
             select(Employee).where(Employee.employee_code == employee_code)
@@ -310,7 +322,7 @@ class PasswordService:
             )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=AUTH_ERROR_EMPLOYEE_NOT_FOUND,
+                detail="ไม่พบรหัสพนักงานในระบบ โปรดติดต่อ GutsEssCenter",
             )
 
         employee_name = (
@@ -326,7 +338,7 @@ class PasswordService:
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=AUTH_ERROR_ACCOUNT_INACTIVE_FORGOT_PASSWORD,
+                detail="บัญชีพนักงานถูกปิดใช้งาน โปรดติดต่อ GutsEssCenter",
             )
 
         if not employee.email:
@@ -337,7 +349,7 @@ class PasswordService:
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=AUTH_ERROR_NO_EMAIL_REGISTERED,
+                detail="ไม่พบอีเมลที่ลงทะเบียนไว้สำหรับรหัสพนักงานนี้ โปรดติดต่อ GutsEssCenter",
             )
 
         # ── Send email and audit based on real result ────────────────
@@ -350,7 +362,7 @@ class PasswordService:
             )
             if success:
                 audit_logger.log(
-                    action=FORGOT_PASSWORD_EMAIL_SENT.format(
+                    action=EMAIL_SEND_SUCCESS.format(
                         resource="Employee", email=email_to
                     ),
                 )
@@ -375,17 +387,6 @@ class PasswordService:
         new_password: str,
         background_tasks: BackgroundTasks,
     ) -> dict:
-        """
-        Change an employee's password after verifying the old password.
-
-        Audits:
-          - CHANGE_PASSWORD_ATTEMPT
-          - CHANGE_PASSWORD_SUCCESS
-
-        Raises:
-            HTTPException: If employee not found, old password wrong,
-                           account inactive, or same password reused.
-        """
         # Audit attempt
         audit_logger.log(
             action=CHANGE_PASSWORD_ATTEMPT.format(resource="Employee"),
@@ -399,19 +400,19 @@ class PasswordService:
         if not employee:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=AUTH_ERROR_EMPLOYEE_NOT_FOUND,
+                detail="ไม่พบรหัสพนักงานในระบบ โปรดติดต่อ GutsEssCenter",
             )
 
         if not employee.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=AUTH_ERROR_ACCOUNT_INACTIVE_FORGOT_PASSWORD,
+                detail="บัญชีพนักงานถูกปิดใช้งาน โปรดติดต่อ GutsEssCenter",
             )
 
         if employee.password != old_password:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=AUTH_ERROR_INVALID_OLD_PASSWORD,
+                detail="รหัสผ่านล่าสุดไม่ถูกต้อง โปรดติดต่อ GutsEssCenter",
             )
 
         if employee.password == new_password:
@@ -436,27 +437,23 @@ class PasswordService:
         db.execute(stmt)
         db.commit()
 
-        # Send notification email and audit based on real result
-        def _send_and_audit():
+        # Audit password change success (immediately after commit)
+        audit_logger.log(
+            action=CHANGE_PASSWORD_SUCCESS.format(resource="Employee"),
+        )
+
+        # Send notification email (background, separate concern)
+        def _send_notification():
             if employee_email:
                 success = send_change_password_notification_email(
                     employee_email, employee_name, new_password, employee_code
                 )
-                if success:
-                    audit_logger.log(
-                        action=CHANGE_PASSWORD_SUCCESS.format(resource="Employee"),
+                if not success:
+                    _logger.warning(
+                        "Change-password notification email FAILED for %s", employee_email
                     )
-                else:
-                    audit_logger.log(
-                        action=CHANGE_PASSWORD_ATTEMPT.format(resource="Employee"),
-                    )
-            else:
-                # No email on file — still audit success for the password change itself
-                audit_logger.log(
-                    action=CHANGE_PASSWORD_SUCCESS.format(resource="Employee"),
-                )
 
-        background_tasks.add_task(_send_and_audit)
+        background_tasks.add_task(_send_notification)
 
         return {"message": "เปลี่ยนรหัสผ่านสำเร็จ"}
 

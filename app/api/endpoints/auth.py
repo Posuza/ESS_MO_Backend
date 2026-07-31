@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit_logger import set_audit_context
 from app.core.db.session import get_db
+
 from app.models.employees import Employee
 from app.schemas.auth import (
     ChangePasswordRequest,
@@ -59,27 +60,11 @@ async def employee_login(
     db: Session = Depends(get_db),
 ):
     """Authenticate and login. Audit logged in service layer."""
-    submitted_employee_code = credentials.employee_code
-    employee = (
-        db.query(Employee)
-        .filter(Employee.employee_code == submitted_employee_code)
-        .first()
-    )
-    employee_name = (
-        employee_auth_service.get_employee_display_name(employee)
-        if employee
-        else submitted_employee_code
-    )
-    set_audit_context(
-        request=http_request,
-        user_name=employee_name,
-        employee_code=submitted_employee_code,
-    )
-
     employee = employee_auth_service.authenticate_employee(
         db=db,
-        employee_code=submitted_employee_code,
+        employee_code=credentials.employee_code,
         password=credentials.password,
+        request=http_request,
     )
     return employee_auth_service.build_login_response(db=db, employee=employee)
 
