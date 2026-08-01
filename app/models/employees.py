@@ -48,25 +48,25 @@ class Employee(Base):
     address_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("addresses.address_id"), nullable=True
     )
-    field_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("fields.field_id"), nullable=False
+    field_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("fields.field_id"), nullable=True
     )
-    department_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("departments.department_id"), nullable=False
+    department_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("departments.department_id"), nullable=True
     )
-    division_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("divisions.division_id"), nullable=False
+    division_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("divisions.division_id"), nullable=True
     )
-    position_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("positions.position_id"), nullable=False
+    position_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("positions.position_id"), nullable=True
     )
 
     routes_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("routes.route_id"), nullable=True
     )
 
-    shift_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("shifts.shift_id"), nullable=False
+    shift_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("shifts.shift_id"), nullable=True
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("1")

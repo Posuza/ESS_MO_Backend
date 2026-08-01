@@ -69,14 +69,22 @@ def _check_active(db: Session, employee: Employee, check_type: str) -> None:
     Raises 404 if not found, 403 if deactivated.
     """
     model, field, label, not_found_msg, inactive_msg = ACTIVE_CHECK_MAP[check_type]
+    employee_value = getattr(employee, field, None)
 
-    # Skip division check if employee has no specific division (division_id == 0)
-    if field == "division_id" and getattr(employee, field) == 0:
+    # Legacy data uses division_id == 0 for department-wide scope.
+    if field == "division_id" and employee_value == 0:
         return
+
+    if employee_value is None:
+        audit_logger.log(action=f"{label}ไม่ได้กำหนด")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"{label}ยังไม่ได้กำหนด ไม่สามารถดำเนินการได้ โปรดติดต่อ GutsEssCenter",
+        )
 
     record = (
         db.execute(
-            select(model).where(getattr(model, field) == getattr(employee, field))
+            select(model).where(getattr(model, field) == employee_value)
         )
         .scalars()
         .first()
@@ -126,6 +134,12 @@ def mo_active_required(func):
         for value in kwargs.values():
             if isinstance(value, Session):
                 db = value
+
+        if db is None or current_employee is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="MO dependency setup is invalid",
+            )
 
         # 1. Position always checked
         _check_active(db, current_employee, "position")

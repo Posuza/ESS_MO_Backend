@@ -17,16 +17,14 @@ class EmployeeRegister(BaseModel):
     phone_number: Optional[str] = Field(None, max_length=10)
     birth_date: date
 
-    # Required foreign keys
+    # Optional foreign keys
     role_id: int
     name_prefix_id: int
-    field_id: int
-    position_id: int
-    department_id: int
-    division_id: int
-    shift_id: int
-
-    # Optional foreign keys
+    field_id: Optional[int] = None
+    position_id: Optional[int] = None
+    department_id: Optional[int] = None
+    division_id: Optional[int] = None
+    shift_id: Optional[int] = None
     address_id: Optional[int] = None
     routes_id: Optional[int] = None
 
@@ -45,8 +43,8 @@ class EmployeeResponse(BaseModel):
     first_name: str
     last_name: str
     role_id: int
-    position_id: int
-    department_id: int
+    position_id: Optional[int] = None
+    department_id: Optional[int] = None
     is_active: bool
 
 
