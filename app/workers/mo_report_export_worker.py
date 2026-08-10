@@ -63,30 +63,38 @@ def now_local() -> datetime:
     return datetime.now()
 
 
-def env_positive_float(name: str, default: float) -> float:
+def env_required_positive_float(name: str) -> float:
     raw_value = os.getenv(name)
     if not raw_value:
-        return default
+        raise RuntimeError(f"Required environment variable {name} is not set")
 
     try:
         value = float(raw_value)
-    except ValueError:
-        return default
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Environment variable {name} must be a number greater than 0"
+        ) from exc
 
-    return value if value > 0 else default
+    if value <= 0:
+        raise RuntimeError(f"Environment variable {name} must be greater than 0")
+    return value
 
 
-def env_positive_int(name: str, default: int) -> int:
+def env_required_positive_int(name: str) -> int:
     raw_value = os.getenv(name)
     if not raw_value:
-        return default
+        raise RuntimeError(f"Required environment variable {name} is not set")
 
     try:
         value = int(raw_value)
-    except ValueError:
-        return default
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Environment variable {name} must be an integer greater than 0"
+        ) from exc
 
-    return value if value > 0 else default
+    if value <= 0:
+        raise RuntimeError(f"Environment variable {name} must be greater than 0")
+    return value
 
 
 def configure_logging(level_name: str) -> None:
@@ -121,8 +129,6 @@ class PdfExportJobRunner:
     STATUS_FAILED = "failed"
     STATUS_CANCELLED = "cancelled"
 
-    DEFAULT_POLL_SECONDS = 5.0
-    DEFAULT_RETENTION_MINUTES = 1
     POLL_SECONDS_ENV = "MO_REPORT_EXPORT_WORKER_POLL_SECONDS"
     RETENTION_MINUTES_ENV = "MO_REPORT_EXPORT_RETENTION_MINUTES"
 
@@ -468,7 +474,6 @@ class SweepJobRunner:
 
     logger = logging.getLogger("mo_report_export_worker.sweep_job")
 
-    DEFAULT_SWEEP_INTERVAL_MINUTES = 0.1
     SWEEP_INTERVAL_MINUTES_ENV = "MO_REPORT_EXPORT_SWEEP_INTERVAL_MINUTES"
 
     def __init__(
@@ -587,33 +592,24 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--poll-seconds",
         type=float,
-        default=env_positive_float(
-            PdfExportJobRunner.POLL_SECONDS_ENV,
-            PdfExportJobRunner.DEFAULT_POLL_SECONDS,
-        ),
-        help=f"Sleep time when no job is available (default from {PdfExportJobRunner.POLL_SECONDS_ENV}).",
+        default=env_required_positive_float(PdfExportJobRunner.POLL_SECONDS_ENV),
+        help=f"Sleep time when no job is available (from {PdfExportJobRunner.POLL_SECONDS_ENV}).",
     )
 
     parser.add_argument(
         "--retention-minutes",
         type=int,
-        default=env_positive_int(
-            PdfExportJobRunner.RETENTION_MINUTES_ENV,
-            PdfExportJobRunner.DEFAULT_RETENTION_MINUTES,
-        ),
-        help=f"PDF file retention in minutes after completion (default from {PdfExportJobRunner.RETENTION_MINUTES_ENV}).",
+        default=env_required_positive_int(PdfExportJobRunner.RETENTION_MINUTES_ENV),
+        help=f"PDF file retention in minutes after completion (from {PdfExportJobRunner.RETENTION_MINUTES_ENV}).",
     )
 
     parser.add_argument(
         "--sweep-minutes",
         type=float,
-        default=env_positive_float(
-            SweepJobRunner.SWEEP_INTERVAL_MINUTES_ENV,
-            SweepJobRunner.DEFAULT_SWEEP_INTERVAL_MINUTES,
-        ),
+        default=env_required_positive_float(SweepJobRunner.SWEEP_INTERVAL_MINUTES_ENV),
         help=(
             f"Delete expired PDF files every N minutes "
-            f"(default from {SweepJobRunner.SWEEP_INTERVAL_MINUTES_ENV})."
+            f"(from {SweepJobRunner.SWEEP_INTERVAL_MINUTES_ENV})."
         ),
     )
 
