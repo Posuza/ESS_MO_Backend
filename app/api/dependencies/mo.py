@@ -15,8 +15,8 @@ async def api_list_reports(
     ...
 
 Logic (mo_active_required):
-  - Director (1, 5): position + department active
-  - Manager (2, 6):  position + department + division active
+  - ALL_DEPT:       position + department active
+  - DIVISION_ONLY:  position + department + division active
   - Other:           reject — not authorized for MO
 """
 
@@ -37,20 +37,15 @@ from app.core.registries.dependencies_message import (
     POSITION_INACTIVE,
     POSITION_NOT_FOUND,
 )
+from app.core.mo.config import (
+    ACCESS_ALL_DEPT,
+    ACCESS_DIVISION_ONLY,
+    get_access_level,
+)
 from app.models.departments import Department
 from app.models.divisions import Division
 from app.models.employees import Employee
 from app.models.positions import Position
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Position role groups
-# ═══════════════════════════════════════════════════════════════════════
-
-POSITION_DIRECTOR = {1, 5}    # ผู้อำนวยการ, รองผู้อำนวยการ
-POSITION_MANAGER = {2, 6}     # ผู้จัดการเขต, รองผู้จัดการเขต
-MO_ALLOWED_POSITIONS = POSITION_DIRECTOR | POSITION_MANAGER  # {1, 2, 5, 6}
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Active scope check — position / department / division
@@ -121,8 +116,8 @@ def mo_active_required(func):
     ``current_employee`` is already injected.
 
     Logic:
-      - Director (1, 5): position + department active
-      - Manager (2, 6):  position + department + division active
+      - ALL_DEPT:       position + department active
+      - DIVISION_ONLY:  position + department + division active
       - Other:           reject — not authorized for MO
     """
 
@@ -144,10 +139,11 @@ def mo_active_required(func):
         # 1. Position always checked
         _check_active(db, current_employee, "position")
 
-        # 2. Role-based scope checks
-        if current_employee.position_id in POSITION_DIRECTOR:
+        # 2. Rank/access-based scope checks
+        access_level = get_access_level(current_employee.position_id)
+        if access_level == ACCESS_ALL_DEPT:
             _check_active(db, current_employee, "department")
-        elif current_employee.position_id in POSITION_MANAGER:
+        elif access_level == ACCESS_DIVISION_ONLY:
             _check_active(db, current_employee, "department")
             _check_active(db, current_employee, "division")
         else:

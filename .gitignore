@@ -57,6 +57,8 @@ logs/
 
 # Uploaded files / generated
 uploads/
+exports/
+tmp/
 *.pem
 
 # Qodo / AI workspace

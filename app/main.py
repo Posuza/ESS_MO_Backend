@@ -26,6 +26,7 @@ from app.models import (  # noqa: F401
     mo_daily_transaction_details,
     mo_daily_transaction_project,
     mo_daily_transactions,
+    mo_report_export_job,
     mo_transaction_discipline_warning,
     name_prefixs,
     position_change_logs,
