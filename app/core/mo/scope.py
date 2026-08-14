@@ -6,7 +6,11 @@ from fastapi import HTTPException, status as http_status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.mo.config import has_department_scope
+from app.core.mo.config import (
+    ACCESS_DEPARTMENT_ONLY,
+    ACCESS_FIELD_ONLY,
+    get_employee_access_level,
+)
 from app.core.mo.workflow_access import is_admin
 from app.models.departments import Department
 from app.models.divisions import Division
@@ -106,6 +110,16 @@ def enforce_same_department(
 ) -> None:
     if is_admin(actor, db):
         return
+    if get_employee_access_level(actor) == ACCESS_FIELD_ONLY:
+        department = db.execute(
+            select(Department).where(Department.department_id == department_id)
+        ).scalars().first()
+        if department and department.field_id == actor.field_id:
+            return
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="You can only access reports in your own field",
+        )
     if department_id is None:
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
@@ -119,7 +133,10 @@ def enforce_same_department(
 
 
 def actor_has_department_scope(actor: Employee, db: Session) -> bool:
-    return has_department_scope(actor.position_id) or is_admin(actor, db)
+    return get_employee_access_level(actor) in {
+        ACCESS_FIELD_ONLY,
+        ACCESS_DEPARTMENT_ONLY,
+    } or is_admin(actor, db)
 
 
 def enforce_division_scope(

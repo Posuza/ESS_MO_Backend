@@ -15,7 +15,8 @@ async def api_list_reports(
     ...
 
 Logic (mo_active_required):
-  - ALL_DEPT:       position + department active
+  - FIELD_ONLY:      position + field active
+  - DEPARTMENT_ONLY: position + department active
   - DIVISION_ONLY:  position + department + division active
   - Other:           reject — not authorized for MO
 """
@@ -38,13 +39,15 @@ from app.core.registries.dependencies_message import (
     POSITION_NOT_FOUND,
 )
 from app.core.mo.config import (
-    ACCESS_ALL_DEPT,
+    ACCESS_DEPARTMENT_ONLY,
     ACCESS_DIVISION_ONLY,
-    get_access_level,
+    ACCESS_FIELD_ONLY,
+    get_employee_access_level,
 )
 from app.models.departments import Department
 from app.models.divisions import Division
 from app.models.employees import Employee
+from app.models.fields import FieldModel
 from app.models.positions import Position
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -52,9 +55,34 @@ from app.models.positions import Position
 # ═══════════════════════════════════════════════════════════════════════
 
 ACTIVE_CHECK_MAP = {
-    "position": (Position, "position_id", "ตำแหน่ง", POSITION_NOT_FOUND, POSITION_INACTIVE),
-    "department": (Department, "department_id", "หน่วยงาน", DEPARTMENT_NOT_FOUND, DEPARTMENT_INACTIVE),
-    "division": (Division, "division_id", "หน่วยงานย่อย", DIVISION_NOT_FOUND, DIVISION_INACTIVE),
+    "position": (
+        Position,
+        "position_id",
+        "ตำแหน่ง",
+        POSITION_NOT_FOUND,
+        POSITION_INACTIVE,
+    ),
+    "department": (
+        Department,
+        "department_id",
+        "หน่วยงาน",
+        DEPARTMENT_NOT_FOUND,
+        DEPARTMENT_INACTIVE,
+    ),
+    "field": (
+        FieldModel,
+        "field_id",
+        "สายงาน",
+        DEPARTMENT_NOT_FOUND,
+        DEPARTMENT_INACTIVE,
+    ),
+    "division": (
+        Division,
+        "division_id",
+        "หน่วยงานย่อย",
+        DIVISION_NOT_FOUND,
+        DIVISION_INACTIVE,
+    ),
 }
 
 
@@ -116,7 +144,8 @@ def mo_active_required(func):
     ``current_employee`` is already injected.
 
     Logic:
-      - ALL_DEPT:       position + department active
+      - FIELD_ONLY:      position + field active
+      - DEPARTMENT_ONLY: position + department active
       - DIVISION_ONLY:  position + department + division active
       - Other:           reject — not authorized for MO
     """
@@ -136,14 +165,16 @@ def mo_active_required(func):
                 detail="MO dependency setup is invalid",
             )
 
-        # 1. Position always checked
-        _check_active(db, current_employee, "position")
-
-        # 2. Rank/access-based scope checks
-        access_level = get_access_level(current_employee.position_id)
-        if access_level == ACCESS_ALL_DEPT:
+        access_level = get_employee_access_level(current_employee)
+        if access_level == ACCESS_FIELD_ONLY:
+            if current_employee.position_id is not None:
+                _check_active(db, current_employee, "position")
+            _check_active(db, current_employee, "field")
+        elif access_level == ACCESS_DEPARTMENT_ONLY:
+            _check_active(db, current_employee, "position")
             _check_active(db, current_employee, "department")
         elif access_level == ACCESS_DIVISION_ONLY:
+            _check_active(db, current_employee, "position")
             _check_active(db, current_employee, "department")
             _check_active(db, current_employee, "division")
         else:

@@ -4,9 +4,11 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-ACCESS_ALL_DEPT = "ALL_DEPT"
+ACCESS_FIELD_ONLY = "FIELD_ONLY"
+ACCESS_DEPARTMENT_ONLY = "DEPARTMENT_ONLY"
 ACCESS_DIVISION_ONLY = "DIVISION_ONLY"
 ACCESS_OWN_ONLY = "OWN_ONLY"
+
 
 @dataclass(frozen=True)
 class MoPositionRank:
@@ -83,16 +85,28 @@ def get_workflow_ranks() -> list[str]:
 
 
 def get_access_level(position_id: Optional[int]) -> str:
+    if position_id == 7:
+        return ACCESS_FIELD_ONLY
     rank = get_position_rank(position_id)
     if not rank:
         return ACCESS_OWN_ONLY
     if rank.rank_level == 1:
-        return ACCESS_ALL_DEPT
+        return ACCESS_DEPARTMENT_ONLY
     return ACCESS_DIVISION_ONLY
 
 
+def get_employee_access_level(employee) -> str:
+    """Resolve access from position and the employee's organization scope."""
+    if employee.field_id is not None and employee.department_id is None:
+        return ACCESS_FIELD_ONLY
+    return get_access_level(employee.position_id)
+
+
 def has_department_scope(position_id: Optional[int]) -> bool:
-    return get_access_level(position_id) == ACCESS_ALL_DEPT
+    return get_access_level(position_id) in {
+        ACCESS_FIELD_ONLY,
+        ACCESS_DEPARTMENT_ONLY,
+    }
 
 
 def is_mo_workflow_position(position_id: Optional[int]) -> bool:

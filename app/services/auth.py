@@ -25,6 +25,7 @@ from app.core.registries import (
 from app.models.departments import Department
 from app.models.divisions import Division
 from app.models.employees import Employee
+from app.models.fields import FieldModel
 from app.models.name_prefixs import NamePrefix
 from app.models.positions import Position
 from app.models.roles import Role
@@ -241,6 +242,11 @@ class EmployeeAuthService:
             .filter(NamePrefix.prefix_id == employee.name_prefix_id)
             .first()
         )
+        db_field = (
+            db.query(FieldModel)
+            .filter(FieldModel.field_id == employee.field_id)
+            .first()
+        )
         db_dept = (
             db.query(Department)
             .filter(Department.department_id == employee.department_id)
@@ -256,6 +262,7 @@ class EmployeeAuthService:
         role_name = db_role.role_name if db_role else ""
         position_name = db_position.position_name if db_position else ""
         prefix_name = db_prefix.prefix_name if db_prefix else ""
+        field_name = db_field.field_name if db_field else ""
         department_name = db_dept.department_name if db_dept else ""
         division_name = db_division.division_name if db_division else ""
         route_name = db_route.route_name if db_route else ""
@@ -268,6 +275,8 @@ class EmployeeAuthService:
                 "last_name": employee.last_name,
                 "role_name": role_name,
                 "name_prefix": prefix_name,
+                "field_id": employee.field_id,
+                "field_name": field_name,
                 "position_id": employee.position_id or None,
                 "position_name": position_name,
                 "department_id": employee.department_id or None,

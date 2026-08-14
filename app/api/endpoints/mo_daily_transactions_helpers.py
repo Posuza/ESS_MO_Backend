@@ -23,7 +23,7 @@ async def api_list_distinct_guard_post_statuses(
     http_request: Request,
     current_employee: Employee = None,
     db: Session = Depends(get_db),
-):
+    ):
     """
     Return all distinct guard post movement statuses from existing reports.
     Excludes "normal", "warning", "danger" (those are project statuses).
@@ -40,7 +40,7 @@ async def api_list_available_report_divisions(
     department_id: int = Query(...),
     current_employee: Employee = None,
     db: Session = Depends(get_db),
-):
+    ):
     return MoDailyTransactionService.list_available_report_divisions(
         db=db,
         actor_employee=current_employee,

@@ -8,6 +8,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.audit_logger import audit_logger
+from app.core.mo.config import ACCESS_FIELD_ONLY, get_employee_access_level
 from app.core.mo.scope import (
     actor_has_department_scope,
     enforce_division_scope,
@@ -416,6 +417,7 @@ class MoDailyTransactionService:
     def list_reports(
         db: Session,
         actor_employee: Employee,
+        field_id: Optional[int] = None,
         department_id: Optional[int] = None,
         division_id: Optional[int] = None,
         start_date: Optional[datetime] = None,
@@ -424,17 +426,31 @@ class MoDailyTransactionService:
         created_by: Optional[str] = None,
     ) -> List[dict]:
         if not is_admin(actor_employee, db):
-            if (
-                department_id is not None
-                and department_id != actor_employee.department_id
-            ):
-                raise HTTPException(
-                    status_code=http_status.HTTP_403_FORBIDDEN,
-                    detail="You can only list reports in your own department",
-                )
-            department_id = actor_employee.department_id
+            access_level = get_employee_access_level(actor_employee)
+            if access_level == ACCESS_FIELD_ONLY:
+                if field_id is not None and field_id != actor_employee.field_id:
+                    raise HTTPException(
+                        status_code=http_status.HTTP_403_FORBIDDEN,
+                        detail="You can only list reports in your own field",
+                    )
+                field_id = actor_employee.field_id
+                if department_id is not None:
+                    enforce_same_department(actor_employee, department_id, db)
+            else:
+                if (
+                    department_id is not None
+                    and department_id != actor_employee.department_id
+                ):
+                    raise HTTPException(
+                        status_code=http_status.HTTP_403_FORBIDDEN,
+                        detail="You can only list reports in your own department",
+                    )
+                department_id = actor_employee.department_id
 
-            if not actor_has_department_scope(actor_employee, db):
+            if (
+                access_level != ACCESS_FIELD_ONLY
+                and not actor_has_department_scope(actor_employee, db)
+            ):
                 if (
                     division_id is not None
                     and division_id != actor_employee.division_id
@@ -450,6 +466,11 @@ class MoDailyTransactionService:
                 )
 
         stmt = select(MoDailyTransaction)
+        if field_id is not None:
+            stmt = stmt.join(
+                Department,
+                Department.department_id == MoDailyTransaction.department_id,
+            ).where(Department.field_id == field_id)
         if department_id is not None:
             stmt = stmt.where(MoDailyTransaction.department_id == department_id)
         if division_id is not None:

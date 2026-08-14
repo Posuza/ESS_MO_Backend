@@ -25,6 +25,7 @@ router = APIRouter()
 @mo_active_required
 async def api_list_reports(
     http_request: Request,
+    field_id: Optional[int] = Query(None),
     department_id: Optional[int] = Query(None),
     division_id: Optional[int] = Query(None),
     start_date: Optional[datetime] = Query(None),
@@ -37,6 +38,7 @@ async def api_list_reports(
     return MoDailyTransactionService.list_reports(
         db=db,
         actor_employee=current_employee,
+        field_id=field_id,
         department_id=department_id,
         division_id=division_id,
         start_date=start_date,

@@ -65,7 +65,8 @@ tmp/
 .qodo/
 
 # Project scripts & data (do not include in repo)
-scripts/
+scripts/*
+!scripts/import_employee_json_to_mysql.py
 jsons/
 
 # Docker overrides

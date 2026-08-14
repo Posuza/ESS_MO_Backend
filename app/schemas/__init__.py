@@ -6,7 +6,6 @@ from . import (
     auth,
     departments,
     districts,
-    divisions,
     employee_permissions,
     employees,
     fields,
@@ -19,6 +18,7 @@ from . import (
     provinces,
     routes,
     sub_districts,
+    mo_workplace,
 )
 
 __all__ = [
@@ -27,7 +27,6 @@ __all__ = [
     "auth",
     "departments",
     "districts",
-    "divisions",
     "employee_permissions",
     "employees",
     "fields",
@@ -40,4 +39,5 @@ __all__ = [
     "provinces",
     "routes",
     "sub_districts",
+    "mo_workplace",
 ]

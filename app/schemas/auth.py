@@ -64,6 +64,8 @@ class EmployeeInfo(BaseModel):
     last_name: str
     role_name: str
     name_prefix: str
+    field_id: Optional[int] = None
+    field_name: Optional[str] = None
     position_id: Optional[int] = None
     position_name: str
     department_id: Optional[int] = None

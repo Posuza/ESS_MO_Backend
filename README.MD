@@ -40,6 +40,20 @@ This is the backend API for the ESS MO (Employee Self Service - Ministry of Orga
 
 The API will be available at `http://127.0.0.1:8000` by default.
 
+### Import employee JSON data into MySQL
+
+Set `DB_ENGINE=mysql` and the target `DB_HOST`, `DB_PORT`, `DB_USER`,
+`DB_PASSWORD`, and `DB_NAME` values in `.env`. Then run:
+
+```powershell
+venv\Scripts\python.exe scripts\import_employee_json_to_mysql.py
+```
+
+The importer creates the application schema and imports employee master data,
+MO transactions, and MO report jobs from `jsons/headers` and `jsons/data`. It
+refuses to write into non-empty target tables. To deliberately delete and
+replace that selected data, run it with `--replace` after backing up MySQL.
+
 ### Deployment
 - See `/deployment` for Windows service deployment (NSSM/Servy) and production configuration.
 - For Linux, use a process manager like `systemd` or `supervisord`.

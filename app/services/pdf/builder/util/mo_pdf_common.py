@@ -433,27 +433,40 @@ class MoPdfCommon:
 
     @staticmethod
     def detail_wrapped_markup(value: Any, *, width_mm: float) -> str:
-        normalized = MoPdfCommon.normalize_thai_text(str(value if value not in (None, "") else "-"))
-        normalized = " ".join(normalized.split())
+        normalized = MoPdfCommon.normalize_thai_text(
+            str(value if value not in (None, "") else "-")
+        )
+        normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
         max_chars = max(18, int(width_mm / 1.03))
         lines: list[str] = []
-        current = ""
 
-        for word in normalized.split(" "):
-            candidate = word if not current else f"{current} {word}"
-            if len(MoPdfCommon.visible_thai_units(candidate)) <= max_chars:
-                current = candidate
+        for source_line in normalized.split("\n"):
+            # Normalize horizontal whitespace without losing explicit newlines.
+            source_line = " ".join(source_line.split())
+            if not source_line:
+                lines.append("")
                 continue
+
+            current = ""
+            for word in source_line.split(" "):
+                candidate = word if not current else f"{current} {word}"
+                if len(MoPdfCommon.visible_thai_units(candidate)) <= max_chars:
+                    current = candidate
+                    continue
+                if current:
+                    lines.append(current)
+                current = ""
+                while len(MoPdfCommon.visible_thai_units(word)) > max_chars:
+                    chunk, word = MoPdfCommon.split_visible_thai_units(
+                        word,
+                        max_chars,
+                    )
+                    lines.append(chunk)
+                current = word
+
             if current:
                 lines.append(current)
-            current = ""
-            while len(MoPdfCommon.visible_thai_units(word)) > max_chars:
-                chunk, word = MoPdfCommon.split_visible_thai_units(word, max_chars)
-                lines.append(chunk)
-            current = word
 
-        if current:
-            lines.append(current)
         return "<br/>".join(html.escape(line) for line in lines) or "-"
 
     @staticmethod
