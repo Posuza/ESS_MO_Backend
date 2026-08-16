@@ -50,6 +50,11 @@ class MoPdfDataLoader:
             MoDailyTransaction.division_id.asc(),
             MoDailyTransaction.mo_daily_transaction_id.asc(),
         )
+        # stmt = stmt.order_by(
+        #     MoDailyTransaction.division_name.asc(),
+        #     MoDailyTransaction.division_id.asc(),
+        #     MoDailyTransaction.mo_daily_transaction_id.asc(),
+        # )
         transactions = db.execute(stmt).scalars().all()
         return [MoDailyTransactionService._build_response(row, db) for row in transactions]
 
