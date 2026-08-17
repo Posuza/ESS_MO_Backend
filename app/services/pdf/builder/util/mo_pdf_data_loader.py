@@ -45,16 +45,17 @@ class MoPdfDataLoader:
                 end_date = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
             stmt = stmt.where(MoDailyTransaction.created_at <= end_date)
 
-        stmt = stmt.order_by(
-            MoDailyTransaction.created_at.asc(),
-            MoDailyTransaction.division_id.asc(),
-            MoDailyTransaction.mo_daily_transaction_id.asc(),
-        )
         # stmt = stmt.order_by(
-        #     MoDailyTransaction.division_name.asc(),
+        #     MoDailyTransaction.created_at.asc(),
         #     MoDailyTransaction.division_id.asc(),
         #     MoDailyTransaction.mo_daily_transaction_id.asc(),
         # )
+        # why this have errror
+        stmt = stmt.order_by(
+            MoDailyTransaction.division_name.asc(),
+            MoDailyTransaction.division_id.asc(),
+            MoDailyTransaction.mo_daily_transaction_id.asc(),
+        )
         transactions = db.execute(stmt).scalars().all()
         return [MoDailyTransactionService._build_response(row, db) for row in transactions]
 
