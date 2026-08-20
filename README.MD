@@ -1,4 +1,4 @@
-# ESS MO Backend new update
+# ESS MO Backend new update to ahead of stable version
 This is the backend API for the ESS MO (Employee Self Service - Ministry of Organization) system. It is built with Python (FastAPI), providing secure RESTful endpoints for employee management, attendance, reporting, and more.
 
 ## Features
