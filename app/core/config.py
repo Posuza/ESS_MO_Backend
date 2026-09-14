@@ -9,6 +9,7 @@ load_dotenv()
 
 from datetime import timedelta
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -41,6 +42,9 @@ class Settings(BaseSettings):
 
     # MFA
     MFA_ISSUER_NAME: str = Field(default="PBAC-System")
+
+    # Media storage. Relative paths are resolved from the backend project root.
+    MEDIA_STORAGE_PATH: Path = Field(default=Path("storage/development"))
 
     @property
     def access_token_expire_timedelta(self) -> timedelta:

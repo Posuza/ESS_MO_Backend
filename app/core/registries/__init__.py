@@ -32,6 +32,12 @@ from app.core.registries.service.auth_message import (
     REGISTER_DUPLICATE,
     RESET_PASSWORD_SUCCESS,
 )
+from app.core.registries.service.face_ai_message import (
+    FACE_VERIFY_ATTEMPT,
+    FACE_VERIFY_FAILED,
+    FACE_VERIFY_NOT_MATCH,
+    FACE_VERIFY_SUCCESS,
+)
 from app.core.registries.dependencies_message import (
     ACCESS_DENIED_PERMISSION,
     ACCESS_DENIED_ROLE,
@@ -167,6 +173,10 @@ __all__ = [
     "EMAIL_SEND_ATTEMPT",
     "EMAIL_SEND_SUCCESS",
     "EMAIL_SEND_FAILED",
+    "FACE_VERIFY_ATTEMPT",
+    "FACE_VERIFY_FAILED",
+    "FACE_VERIFY_NOT_MATCH",
+    "FACE_VERIFY_SUCCESS",
     "POSITION_INACTIVE",
     "POSITION_NOT_FOUND",
     "REGISTER",

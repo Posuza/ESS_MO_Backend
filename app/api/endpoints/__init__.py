@@ -1,8 +1,10 @@
 from fastapi import APIRouter
 
 from .auth import router as auth_router
+from .face import router as face_router
 from .mo_daily_transactions import router as mo_daily_transactions_router
 from .mo_daily_transactions_helpers import router as mo_daily_transactions_helpers_router
+from .model_settings import router as model_settings_router
 from .mo_report_export import router as mo_report_export_router
 from .mo_workplace import router as workplace_router
 
@@ -11,6 +13,16 @@ api_router = APIRouter()
 api_router.include_router(auth_router,
     prefix="/auth",
     tags=["auth"])
+api_router.include_router(
+    face_router,
+    prefix="/faces",
+    tags=["faces"],
+)
+api_router.include_router(
+    model_settings_router,
+    prefix="/model-settings",
+    tags=["model-settings"],
+)
 api_router.include_router(
     workplace_router,
     prefix="/workplace",
