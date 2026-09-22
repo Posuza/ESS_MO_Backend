@@ -47,8 +47,9 @@ pip install -r requirements-worker.txt
 python -m app.workers.mo_report_export_worker
 ```
 
-`requirements-worker.txt` excludes the ONNX face runtime. Face models and AI
-dependencies are used only by the backend API process.
+`requirements-worker.txt` excludes NumPy and the ONNX face runtime. The worker
+does not load the face models; Pillow may still be installed through ReportLab
+for PDF and image handling.
 
 ### Import employee JSON data into MySQL
 
