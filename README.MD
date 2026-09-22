@@ -39,6 +39,17 @@ This is the backend API for the ESS MO (Employee Self Service - Ministry of Orga
 
 The API will be available at `http://127.0.0.1:8000` by default.
 
+The Windows report-worker service uses the same backend source checkout with a
+separate lightweight environment:
+
+```bash
+pip install -r requirements-worker.txt
+python -m app.workers.mo_report_export_worker
+```
+
+`requirements-worker.txt` excludes the ONNX face runtime. Face models and AI
+dependencies are used only by the backend API process.
+
 ### Import employee JSON data into MySQL
 
 Set `DB_ENGINE=mysql` and the target `DB_HOST`, `DB_PORT`, `DB_USER`,
