@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
+import traceback
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.audit_logger import set_audit_context
@@ -9,6 +11,7 @@ from app.core.db.session import get_db
 from app.models.employees import Employee
 from app.schemas.auth import (
     ChangePasswordRequest,
+    EmployeeFaceLogin,
     EmployeeLogin,
     EmployeeRegister,
     EmployeeResponse,
@@ -18,7 +21,9 @@ from app.schemas.auth import (
     LogoutResponse,
     MessageResponse,
 )
+from app.schemas.face_verify import FaceVerifyRequest
 from app.services.auth import employee_auth_service, password_service
+from app.services.face_verify import face_verify_service
 
 router = APIRouter()
 
@@ -67,6 +72,65 @@ async def employee_login(
         request=http_request,
     )
     return employee_auth_service.build_login_response(db=db, employee=employee)
+
+
+@router.post("/face-login", response_model=LoginResponse)
+async def employee_face_login(
+    credentials: EmployeeFaceLogin,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
+    """Authenticate and login with a verified face image."""
+    print(
+        "[FaceLogin] request received "
+        f"employee_code={credentials.employee_code} "
+        f"image_length={len(credentials.image_data_url or '')}",
+        flush=True,
+    )
+    try:
+        verification = face_verify_service.verify_face(
+            db=db,
+            payload=FaceVerifyRequest(
+                employee_code=credentials.employee_code,
+                image_data_url=credentials.image_data_url,
+                purpose="login",
+            ),
+        )
+        print(f"[FaceLogin] verification result={verification}", flush=True)
+        if not verification.get("is_match"):
+            print("[FaceLogin] face did not match", flush=True)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=verification.get("message") or "ใบหน้าไม่ตรงกับข้อมูลพนักงาน",
+            )
+
+        employee = employee_auth_service.authenticate_face_verified_employee(
+            db=db,
+            employee_code=credentials.employee_code,
+            request=http_request,
+        )
+        print("[FaceLogin] face-authenticated employee loaded", flush=True)
+        response = employee_auth_service.build_login_response(db=db, employee=employee)
+        print("[FaceLogin] login response built", flush=True)
+        return response
+    except HTTPException as exc:
+        print(
+            "[FaceLogin] HTTPException "
+            f"status={exc.status_code} detail={exc.detail}",
+            flush=True,
+        )
+        raise
+    except Exception as exc:
+        print(
+            "[FaceLogin] Unexpected error "
+            f"{exc.__class__.__name__}: {exc}",
+            flush=True,
+        )
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Face login internal error: {exc.__class__.__name__}",
+        ) from exc
 
 
 @router.post("/logout", response_model=LogoutResponse)

@@ -37,18 +37,11 @@ def resolve_face_image_path(stored_value: str) -> Path:
     root = media_storage_root()
     image_key = normalize_face_image_key(stored_value)
     filename = Path(image_key).name
-    image_path = (
-        root / filename
-        if root.name == FACE_IMAGE_PREFIX
-        else root / image_key
-    ).resolve()
+    image_path = (root / filename).resolve()
     try:
         image_path.relative_to(root)
     except ValueError as exc:
         raise ValueError(
             "Face image path escapes the media storage directory"
         ) from exc
-    expected_parent = root if root.name == FACE_IMAGE_PREFIX else root / FACE_IMAGE_PREFIX
-    if image_path.parent != expected_parent:
-        raise ValueError("Face image path escapes the media storage directory")
     return image_path

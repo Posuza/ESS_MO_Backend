@@ -4,6 +4,7 @@ import base64
 import io
 import logging
 import time
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -21,10 +22,21 @@ from app.core.media_storage import (
 )
 from app.models.employees import Employee
 from app.core.registries import (
+    FACE_LOGIN_LOOKUP_ATTEMPT,
+    FACE_LOGIN_LOOKUP_FAILED,
+    FACE_LOGIN_LOOKUP_SUCCESS,
+    FACE_LOGIN_SCAN_ATTEMPT,
+    FACE_LOGIN_SCAN_FAILED,
+    FACE_LOGIN_SCAN_NOT_MATCH,
+    FACE_LOGIN_SCAN_SUCCESS,
     FACE_VERIFY_ATTEMPT,
     FACE_VERIFY_FAILED,
     FACE_VERIFY_NOT_MATCH,
     FACE_VERIFY_SUCCESS,
+    FORGOT_PASSWORD_FACE_SCAN_ATTEMPT,
+    FORGOT_PASSWORD_FACE_SCAN_FAILED,
+    FORGOT_PASSWORD_FACE_SCAN_NOT_MATCH,
+    FORGOT_PASSWORD_FACE_SCAN_SUCCESS,
 )
 from app.schemas.face_verify import FaceVerifyRequest
 from app.services.auth import employee_auth_service
@@ -581,6 +593,29 @@ def _reference_image(employee: Employee) -> str:
     return employee.profile_image_path
 
 
+def _face_verify_audit_messages(purpose: str):
+    if purpose == "login":
+        return (
+            FACE_LOGIN_SCAN_ATTEMPT,
+            FACE_LOGIN_SCAN_SUCCESS,
+            FACE_LOGIN_SCAN_NOT_MATCH,
+            FACE_LOGIN_SCAN_FAILED,
+        )
+    if purpose == "forgot_password":
+        return (
+            FORGOT_PASSWORD_FACE_SCAN_ATTEMPT,
+            FORGOT_PASSWORD_FACE_SCAN_SUCCESS,
+            FORGOT_PASSWORD_FACE_SCAN_NOT_MATCH,
+            FORGOT_PASSWORD_FACE_SCAN_FAILED,
+        )
+    return (
+        FACE_VERIFY_ATTEMPT,
+        FACE_VERIFY_SUCCESS,
+        FACE_VERIFY_NOT_MATCH,
+        FACE_VERIFY_FAILED,
+    )
+
+
 class FaceVerifyService:
     @staticmethod
     def get_employee(db: Session, employee_code: str) -> Employee:
@@ -593,8 +628,27 @@ class FaceVerifyService:
     def get_employee_profile(db: Session, employee_code: str) -> dict:
         """Return the same non-sensitive employee details used after login."""
 
-        employee = FaceVerifyService.get_employee(db, employee_code)
+        code = employee_code.strip()
+        audit_logger.log(
+            action=FACE_LOGIN_LOOKUP_ATTEMPT.format(employee_code=code)
+        )
+        try:
+            employee = FaceVerifyService.get_employee(db, code)
+        except HTTPException as exc:
+            audit_logger.log(
+                action=FACE_LOGIN_LOOKUP_FAILED.format(
+                    employee_code=code,
+                    reason=exc.detail,
+                )
+            )
+            raise
         profile = employee_auth_service.build_login_response(db, employee)["employee"]
+        audit_logger.log(
+            action=FACE_LOGIN_LOOKUP_SUCCESS.format(
+                employee_code=code,
+                has_face_profile=bool(employee.profile_image_path),
+            )
+        )
         return {
             **profile,
             "has_face_profile": bool(employee.profile_image_path),
@@ -602,26 +656,59 @@ class FaceVerifyService:
 
     @staticmethod
     def get_profile_image_path(db: Session, employee_code: str) -> Path:
-        employee = FaceVerifyService.get_employee(db, employee_code)
+        code = employee_code.strip()
+        audit_logger.log(
+            action=FACE_LOGIN_LOOKUP_ATTEMPT.format(employee_code=code)
+        )
+        try:
+            employee = FaceVerifyService.get_employee(db, code)
+        except HTTPException as exc:
+            audit_logger.log(
+                action=FACE_LOGIN_LOOKUP_FAILED.format(
+                    employee_code=code,
+                    reason=exc.detail,
+                )
+            )
+            raise
         try:
             image_path = resolve_face_image_path(_reference_image(employee))
         except ValueError as exc:
+            audit_logger.log(
+                action=FACE_LOGIN_LOOKUP_FAILED.format(
+                    employee_code=code,
+                    reason="invalid face image path",
+                )
+            )
             raise HTTPException(
                 status_code=500, detail="ข้อมูลตำแหน่งไฟล์รูปใบหน้าไม่ถูกต้อง"
             ) from exc
         if not image_path.is_file():
+            audit_logger.log(
+                action=FACE_LOGIN_LOOKUP_FAILED.format(
+                    employee_code=code,
+                    reason="reference image file not found",
+                )
+            )
             raise HTTPException(
                 status_code=404,
                 detail=f"ไม่พบไฟล์รูปใบหน้าอ้างอิง: {image_path}",
             )
+        audit_logger.log(
+            action=FACE_LOGIN_LOOKUP_SUCCESS.format(
+                employee_code=code,
+                has_face_profile=True,
+            )
+        )
         return image_path
 
     @staticmethod
-    @staticmethod
     def verify_face(db: Session, payload: FaceVerifyRequest) -> dict[str, object]:
         code = payload.employee_code.strip()
+        attempt_message, success_message, not_match_message, failed_message = (
+            _face_verify_audit_messages(payload.purpose)
+        )
         audit_logger.log(
-            action=FACE_VERIFY_ATTEMPT.format(employee_code=code)
+            action=attempt_message.format(employee_code=code)
         )
         try:
             _rate(code)
@@ -660,7 +747,7 @@ class FaceVerifyService:
 
             if is_match:
                 audit_logger.log(
-                    action=FACE_VERIFY_SUCCESS.format(
+                    action=success_message.format(
                         employee_code=code,
                         score=rounded_score,
                         threshold=threshold,
@@ -668,7 +755,7 @@ class FaceVerifyService:
                 )
             else:
                 audit_logger.log(
-                    action=FACE_VERIFY_NOT_MATCH.format(
+                    action=not_match_message.format(
                         employee_code=code,
                         score=rounded_score,
                         threshold=threshold,
@@ -688,20 +775,33 @@ class FaceVerifyService:
             }
         except HTTPException as exc:
             audit_logger.log(
-                action=FACE_VERIFY_FAILED.format(
+                action=failed_message.format(
                     employee_code=code,
                     reason=exc.detail,
                 )
             )
             raise
         except Exception as exc:
+            _logger.exception("Unexpected face verification error for %s", code)
+            print(
+                "[FaceVerify] Unexpected face verification error "
+                f"for employee_code={code}: {exc.__class__.__name__}: {exc}",
+                flush=True,
+            )
+            traceback.print_exc()
             audit_logger.log(
-                action=FACE_VERIFY_FAILED.format(
+                action=failed_message.format(
                     employee_code=code,
                     reason=exc.__class__.__name__,
                 )
             )
-            raise
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "ระบบยืนยันใบหน้าเกิดข้อผิดพลาด "
+                    f"({exc.__class__.__name__}) กรุณาลองใหม่อีกครั้ง"
+                ),
+            ) from exc
 
 
 face_verify_service = FaceVerifyService()

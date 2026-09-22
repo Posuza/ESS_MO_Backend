@@ -47,6 +47,11 @@ LOGIN_ATTEMPT: Final[str] = "{resource} Attempt to Login"
 LOGIN_FAILED: Final[str] = "{resource} Login attempt failed"
 LOGIN_FAILED_REASON: Final[str] = "{resource} Login attempt failed - {reason}"
 LOGIN_SUCCESS: Final[str] = "{resource} Login successful"
+PASSWORD_LOGIN_ATTEMPT: Final[str] = "Password login attempt: employee_code={employee_code}"
+PASSWORD_LOGIN_FAILED: Final[str] = (
+    "Password login failed: employee_code={employee_code}, reason={reason}"
+)
+PASSWORD_LOGIN_SUCCESS: Final[str] = "Password login success: employee_code={employee_code}"
 
 # =========================================================
 # AUTH — Audit:  Logout

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 class EmployeeLookupResponse(BaseModel):
@@ -32,6 +34,7 @@ class FaceVerifyRequest(BaseModel):
 
     employee_code: str = Field(..., min_length=6, max_length=6)
     image_data_url: str = Field(..., min_length=100)
+    purpose: Literal["login", "forgot_password", "generic"] = "generic"
 
 
 class FaceVerifyResponse(BaseModel):

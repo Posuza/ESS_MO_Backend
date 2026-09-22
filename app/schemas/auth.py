@@ -55,6 +55,13 @@ class EmployeeLogin(BaseModel):
     password: str = Field(..., min_length=6, max_length=6)
 
 
+class EmployeeFaceLogin(BaseModel):
+    """Schema for employee face-login credentials."""
+
+    employee_code: str = Field(..., min_length=6, max_length=6)
+    image_data_url: str = Field(..., min_length=100)
+
+
 class EmployeeInfo(BaseModel):
     """Schema for employee information in login response."""
 

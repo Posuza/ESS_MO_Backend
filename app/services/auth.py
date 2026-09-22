@@ -15,10 +15,13 @@ from app.core.registries import (
     FORGOT_PASSWORD_ATTEMPT,
     EMAIL_SEND_SUCCESS,
     FORGOT_PASSWORD_FAILED,
-    LOGIN_ATTEMPT,
-    LOGIN_FAILED_REASON,
-    LOGIN_SUCCESS,
     LOGOUT_SUCCESS,
+    FACE_LOGIN_SESSION_ATTEMPT,
+    FACE_LOGIN_SESSION_FAILED,
+    FACE_LOGIN_SESSION_SUCCESS,
+    PASSWORD_LOGIN_ATTEMPT,
+    PASSWORD_LOGIN_FAILED,
+    PASSWORD_LOGIN_SUCCESS,
     REGISTER,
     REGISTER_DUPLICATE,
 )
@@ -174,13 +177,14 @@ class EmployeeAuthService:
                 employee_code=employee_code,
             )
 
-        # Audit login attempt
-        audit_logger.log(action=LOGIN_ATTEMPT.format(resource="Employee"))
+        audit_logger.log(
+            action=PASSWORD_LOGIN_ATTEMPT.format(employee_code=employee_code)
+        )
 
         if not employee:
             audit_logger.log(
-                action=LOGIN_FAILED_REASON.format(
-                    resource="Employee",
+                action=PASSWORD_LOGIN_FAILED.format(
+                    employee_code=employee_code,
                     reason="employee not found",
                 )
             )
@@ -192,8 +196,8 @@ class EmployeeAuthService:
         # Verify password (plaintext comparison - TODO: hash when security enabled)
         if employee.password != password:
             audit_logger.log(
-                action=LOGIN_FAILED_REASON.format(
-                    resource="Employee",
+                action=PASSWORD_LOGIN_FAILED.format(
+                    employee_code=employee_code,
                     reason="invalid password",
                 )
             )
@@ -205,8 +209,8 @@ class EmployeeAuthService:
         # Check if account is active
         if not employee.is_active:
             audit_logger.log(
-                action=LOGIN_FAILED_REASON.format(
-                    resource="Employee",
+                action=PASSWORD_LOGIN_FAILED.format(
+                    employee_code=employee_code,
                     reason="account inactive",
                 )
             )
@@ -215,8 +219,70 @@ class EmployeeAuthService:
                 detail="บัญชีผู้ใช้ถูกปิดใช้งาน โปรดติดต่อ GutsEssCenter",
             )
 
-        # Audit login success
-        audit_logger.log(action=LOGIN_SUCCESS.format(resource="Employee"))
+        audit_logger.log(
+            action=PASSWORD_LOGIN_SUCCESS.format(employee_code=employee_code)
+        )
+
+        return employee
+
+    @staticmethod
+    def authenticate_face_verified_employee(
+        db: Session, employee_code: str, request: Request | None = None
+    ) -> Employee:
+        """
+        Authenticate an employee after face verification has already matched.
+        Sets audit context if request is provided and returns the same employee
+        object used by password login.
+        """
+        employee = (
+            db.query(Employee).filter(Employee.employee_code == employee_code).first()
+        )
+
+        if request:
+            employee_name = (
+                f"{employee.first_name} {employee.last_name}".strip()
+                or employee.email
+                or employee_code
+                if employee
+                else employee_code
+            )
+            set_audit_context(
+                request=request,
+                user_name=employee_name,
+                employee_code=employee_code,
+            )
+
+        audit_logger.log(
+            action=FACE_LOGIN_SESSION_ATTEMPT.format(employee_code=employee_code)
+        )
+
+        if not employee:
+            audit_logger.log(
+                action=FACE_LOGIN_SESSION_FAILED.format(
+                    employee_code=employee_code,
+                    reason="employee not found",
+                )
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="ไม่พบรหัสพนักงานในระบบ โปรดติดต่อ GutsEssCenter",
+            )
+
+        if not employee.is_active:
+            audit_logger.log(
+                action=FACE_LOGIN_SESSION_FAILED.format(
+                    employee_code=employee_code,
+                    reason="account inactive",
+                )
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="บัญชีผู้ใช้ถูกปิดใช้งาน โปรดติดต่อ GutsEssCenter",
+            )
+
+        audit_logger.log(
+            action=FACE_LOGIN_SESSION_SUCCESS.format(employee_code=employee_code)
+        )
 
         return employee
 
