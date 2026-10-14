@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.audit_logger import set_audit_context
@@ -18,9 +18,29 @@ from app.schemas.auth import (
     LogoutResponse,
     MessageResponse,
 )
+from app.schemas.ess import EssProfileRequest
 from app.services.auth import employee_auth_service, password_service
 
 router = APIRouter()
+
+
+@router.post("/ess/profile", response_model=LoginResponse)
+async def ess_profile(request: EssProfileRequest, db: Session = Depends(get_db)):
+    """Return the local profile for an ESS-authenticated browser session.
+
+    The ESS SDK verifies the signed callback in the browser. This endpoint is
+    deliberately profile bootstrap only; protected operations must still use
+    the backend's authenticated actor/session mechanism and must not trust this
+    request body as authorization.
+    """
+    employee = (
+        db.query(Employee)
+        .filter(Employee.employee_code == request.employee_id, Employee.is_active.is_(True))
+        .first()
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail="ไม่พบข้อมูลพนักงาน")
+    return employee_auth_service.build_login_response(db=db, employee=employee)
 
 
 @router.post(
