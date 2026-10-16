@@ -406,14 +406,17 @@ class MoReportPdfExport:
                 file_path.unlink()
             except OSError:
                 logger.exception(
-                    "ไม่สามารถลบไฟล์ PDF ที่หมดอายุได้: %s",
-                    file_path,
-                )
+                        "Failed to delete expired PDF file: %s",
+                        file_path,
+                    )
                 continue
 
             removed_count += 1
 
         if removed_count:
-            logger.info("sweep_expired_files: ลบไฟล์ที่หมดอายุ %s ไฟล์", removed_count)
+            logger.info(
+                    "sweep_expired_files: removed %s expired files",
+                    removed_count,
+                )
 
         return removed_count
